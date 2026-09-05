@@ -44,7 +44,15 @@ public class MainActivity extends Activity implements LocationListener {
         destination=findViewById(R.id.destination); castIp=findViewById(R.id.castIp); castPort=findViewById(R.id.castPort);
         lm=(LocationManager)getSystemService(LOCATION_SERVICE);
         mpm=(MediaProjectionManager)getSystemService(MEDIA_PROJECTION_SERVICE);
+        WebView mapWeb = findViewById(R.id.mapWeb);
+WebSettings mapSettings = mapWeb.getSettings();
+mapSettings.setJavaScriptEnabled(true);
+mapSettings.setDomStorageEnabled(true);
+mapWeb.setWebViewClient(new WebViewClient());
 
+mapWeb.loadUrl("https://www.openstreetmap.org/export/embed.html?bbox=21.00%2C55.88%2C21.12%2C55.96&layer=mapnik&marker=55.917%2C21.068");
+
+mapWeb.loadUrl("https://www.openstreetmap.org/export/embed.html?bbox=21.00%2C55.88%2C21.12%2C55.96&layer=mapnik&marker=55.917%2C21.068");
         findViewById(R.id.googleMaps).setOnClickListener(v->navigate(false));
         findViewById(R.id.waze).setOnClickListener(v->navigate(true));
         findViewById(R.id.openSpotify).setOnClickListener(v->openPackage("com.spotify.music"));
