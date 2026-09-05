@@ -1,0 +1,22 @@
+Original file analysed:
+app_com.deepwei.electricbicycle_cast_android_latest.apk
+
+Observed:
+- Flutter app + native Android components
+- MediaProjectionManager present
+- MediaCodec / video-avc present
+- Flutter/native symbols/strings:
+  nativeGetPort
+  checkCastServer
+  askCastService
+  startCast
+  startCastService
+  stopCastService
+  checkCastDevice
+  setCastService
+  deviceIp
+  mWssMode
+- bundled cast_help.md says phone hotspot is the AP and TFT connects to it.
+- bundled navigation library: AMap SDK NAVI 9.8.3 (China-oriented navigation stack)
+
+No claim is made that TCP 8888 is the confirmed TFT cast port.
