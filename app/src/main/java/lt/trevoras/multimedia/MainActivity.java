@@ -23,7 +23,8 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class MainActivity extends Activity implements LocationListener {
-    TextView speed, trip, maxspeed, time, heading, track, artist, castStatus, subtitle, WebView mapWeb;
+    TextView speed, trip, maxspeed, time, heading, track, artist, castStatus, subtitle;
+WebView mapWeb;
     EditText destination, castIp, castPort;
     LocationManager lm;
     Location lastLocation;
