@@ -56,6 +56,7 @@ public class MainActivity extends Activity implements LocationListener {
 
     long lastWeatherUpdate = 0;
     boolean tftVerifiedConnected = false;
+    TrevorasWssClient wssClient;
 
     @Override
     public void onCreate(Bundle b) {
@@ -92,6 +93,27 @@ public class MainActivity extends Activity implements LocationListener {
 
         setupMap();
         setTftDisconnected();
+        wssClient = new TrevorasWssClient(new TrevorasWssClient.Listener() {
+
+    @Override
+    public void onStatus(String text) {
+        runOnUiThread(() -> castStatus.setText(text));
+    }
+
+    @Override
+    public void onConnected(String deviceIp) {
+        runOnUiThread(() -> {
+            castIp.setText(deviceIp);
+            castPort.setText("9038");
+            setTftConnected(deviceIp, 9038);
+        });
+    }
+
+    @Override
+    public void onDisconnected() {
+        runOnUiThread(() -> setTftDisconnected());
+    }
+});
         refreshTrip();
         updateLiveClock();
 
@@ -114,7 +136,11 @@ public class MainActivity extends Activity implements LocationListener {
         findViewById(R.id.resetTrip).setOnClickListener(v -> resetTrip());
 
         findViewById(R.id.testTft).setOnClickListener(v -> testTft());
-        findViewById(R.id.autoDiscover).setOnClickListener(v -> autoDiscover());
+findViewById(R.id.autoDiscover).setOnClickListener(v -> {
+    setTftDisconnected();
+    castStatus.setText("Ieškoma TFT gamykliniu protokolu...");
+    wssClient.connectAsync();
+});
         findViewById(R.id.deepScan).setOnClickListener(v -> deepScan());
 
         findViewById(R.id.startCast).setOnClickListener(v -> requestCast());
