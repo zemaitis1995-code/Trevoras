@@ -18,168 +18,177 @@
             android:orientation="vertical">
 
             <!-- HEADER -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="78dp"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:paddingLeft="18dp"
-                android:paddingRight="18dp">
+           <!-- HEADER -->
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="78dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingLeft="18dp"
+    android:paddingRight="18dp">
 
-                <TextView
-                    android:layout_width="42dp"
-                    android:layout_height="42dp"
-                    android:gravity="center"
-                    android:text="☰"
-                    android:textSize="28sp"
-                    android:textColor="#1C2833"/>
+    <!-- NUSTATYMAI -->
+    <TextView
+        android:id="@+id/settingsButton"
+        android:layout_width="46dp"
+        android:layout_height="46dp"
+        android:gravity="center"
+        android:text="⚙"
+        android:textSize="26sp"
+        android:textColor="#263640"
+        android:background="@drawable/chip_white"/>
 
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:gravity="center">
+    <!-- LOGOTIPAS -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="TREVORAS"
-                        android:textColor="#14202B"
-                        android:textSize="28sp"
-                        android:textStyle="bold"
-                        android:letterSpacing="0.08"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="TREVORAS"
+            android:textColor="#14202B"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.08"/>
 
-                    <TextView
-                        android:id="@+id/subtitle"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="— ANTANAS EDITION —"
-                        android:textColor="#8794A0"
-                        android:textSize="9sp"
-                        android:textStyle="bold"
-                        android:letterSpacing="0.22"/>
-                </LinearLayout>
+        <TextView
+            android:id="@+id/subtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="— ANTANAS EDITION —"
+            android:textColor="#8794A0"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.18"/>
+    </LinearLayout>
 
-                <LinearLayout
-                    android:layout_width="88dp"
-                    android:layout_height="42dp"
-                    android:orientation="horizontal"
-                    android:gravity="center"
-                    android:background="@drawable/tft_badge_bg">
+    <!-- TFT BŪSENA -->
+    <LinearLayout
+        android:layout_width="98dp"
+        android:layout_height="44dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="@drawable/tft_badge_bg">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="●"
-                        android:textColor="#15C66A"
-                        android:textSize="14sp"/>
+        <TextView
+            android:id="@+id/tftDot"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="●"
+            android:textColor="#9AA6AF"
+            android:textSize="14sp"/>
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginLeft="5dp"
-                        android:text="TFT\nPRIJUNGTAS"
-                        android:gravity="center"
-                        android:textColor="#293640"
-                        android:textSize="8sp"
-                        android:textStyle="bold"/>
-                </LinearLayout>
-            </LinearLayout>
+        <TextView
+            android:id="@+id/tftBadgeText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="5dp"
+            android:text="TFT&#10;NEPRIJUNGTAS"
+            android:gravity="center"
+            android:textColor="#293640"
+            android:textSize="8sp"
+            android:textStyle="bold"/>
+    </LinearLayout>
 
-            <!-- HERO -->
-            <FrameLayout
-                android:layout_width="match_parent"
-                android:layout_height="360dp"
-                android:background="@drawable/hero_background">
+</LinearLayout>
 
-                <ImageView
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:src="@drawable/hero_coast"
-                    android:scaleType="centerCrop"
-                    android:contentDescription="Pajūrio fonas"/>
+<!-- HERO -->
+<FrameLayout
+    android:layout_width="match_parent"
+    android:layout_height="330dp">
 
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="top|start"
-                    android:layout_marginLeft="22dp"
-                    android:layout_marginTop="18dp"
-                    android:orientation="vertical">
+    <!-- PAJŪRIO FONAS -->
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:src="@drawable/hero_coast"
+        android:scaleType="centerCrop"/>
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="☀  18°C"
-                        android:textColor="#18242E"
-                        android:textSize="18sp"
-                        android:textStyle="bold"/>
+    <!-- LIVE ORAS -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_marginLeft="22dp"
+        android:layout_marginTop="18dp"
+        android:orientation="vertical"
+        android:padding="9dp"
+        android:background="@drawable/chip_white">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Palanga"
-                        android:textColor="#53616D"
-                        android:textSize="12sp"/>
+        <TextView
+            android:id="@+id/weatherTemp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="☀  —°C"
+            android:textColor="#18242E"
+            android:textSize="18sp"
+            android:textStyle="bold"/>
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Giedra"
-                        android:textColor="#7E8C98"
-                        android:textSize="10sp"/>
-                </LinearLayout>
+        <TextView
+            android:id="@+id/weatherCity"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Nustatoma vieta..."
+            android:textColor="#53616D"
+            android:textSize="12sp"/>
 
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="top|end"
-                    android:layout_marginRight="22dp"
-                    android:layout_marginTop="18dp"
-                    android:orientation="vertical"
-                    android:gravity="end">
+        <TextView
+            android:id="@+id/weatherDesc"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Orų duomenys"
+            android:textColor="#7E8C98"
+            android:textSize="10sp"/>
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="2026-09-05"
-                        android:textColor="#4F5D68"
-                        android:textSize="10sp"/>
+    </LinearLayout>
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="16:55"
-                        android:textColor="#18242E"
-                        android:textSize="16sp"
-                        android:textStyle="bold"/>
-                </LinearLayout>
+    <!-- LIVE DATA IR LAIKAS -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginRight="22dp"
+        android:layout_marginTop="18dp"
+        android:orientation="vertical"
+        android:gravity="end"
+        android:padding="9dp"
+        android:background="@drawable/chip_white">
 
-                <ImageView
-                    android:layout_width="match_parent"
-                    android:layout_height="270dp"
-                    android:layout_gravity="bottom"
-                    android:layout_marginLeft="24dp"
-                    android:layout_marginRight="24dp"
-                    android:layout_marginBottom="8dp"
-                    android:src="@drawable/trevoras_bike"
-                    android:scaleType="centerInside"
-                    android:contentDescription="Trevoras motociklas"/>
+        <TextView
+            android:id="@+id/heroDate"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="---- -- --"
+            android:textColor="#53616D"
+            android:textSize="10sp"/>
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="bottom|end"
-                    android:layout_marginRight="26dp"
-                    android:layout_marginBottom="30dp"
-                    android:text="Explore\nMore"
-                    android:gravity="center"
-                    android:textColor="#26333E"
-                    android:textSize="18sp"
-                    android:textStyle="italic"/>
-            </FrameLayout>
+        <TextView
+            android:id="@+id/heroClock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="--:--"
+            android:textColor="#18242E"
+            android:textSize="18sp"
+            android:textStyle="bold"/>
 
+    </LinearLayout>
+
+    <!-- TREVORAS -->
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="245dp"
+        android:layout_gravity="bottom"
+        android:layout_marginLeft="30dp"
+        android:layout_marginRight="30dp"
+        android:layout_marginBottom="0dp"
+        android:src="@drawable/trevoras_bike"
+        android:scaleType="centerInside"/>
+
+</FrameLayout>
             <!-- STATS -->
 <LinearLayout
     android:layout_width="match_parent"
