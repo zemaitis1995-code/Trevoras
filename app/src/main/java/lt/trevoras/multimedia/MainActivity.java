@@ -21,9 +21,10 @@ import android.widget.Toast;
 import java.net.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainActivity extends Activity implements LocationListener {
-    TextView speed, trip, maxspeed, time, heading, track, artist, castStatus, subtitle;
+    TextView speed, trip, maxspeed, time, heading, track, artist, castStatus, subtitle, discoveryLog;
 WebView mapWeb;
     EditText destination, castIp, castPort;
     LocationManager lm;
@@ -43,6 +44,7 @@ WebView mapWeb;
         time=findViewById(R.id.time); heading=findViewById(R.id.heading); track=findViewById(R.id.track);
         artist=findViewById(R.id.artist); castStatus=findViewById(R.id.castStatus); subtitle=findViewById(R.id.subtitle);
         destination=findViewById(R.id.destination); castIp=findViewById(R.id.castIp); castPort=findViewById(R.id.castPort);
+        discoveryLog=findViewById(R.id.discoveryLog);
         lm=(LocationManager)getSystemService(LOCATION_SERVICE);
         mpm=(MediaProjectionManager)getSystemService(MEDIA_PROJECTION_SERVICE);
         mapWeb = findViewById(R.id.mapWeb);
@@ -53,7 +55,7 @@ mapWeb.setWebViewClient(new WebViewClient());
 
 mapWeb.loadUrl("https://www.openstreetmap.org/export/embed.html?bbox=21.00%2C55.88%2C21.12%2C55.96&layer=mapnik&marker=55.917%2C21.068");
 
-mapWeb.loadUrl("https://www.openstreetmap.org/export/embed.html?bbox=21.00%2C55.88%2C21.12%2C55.96&layer=mapnik&marker=55.917%2C21.068");
+
         findViewById(R.id.googleMaps).setOnClickListener(v->navigate(false));
         findViewById(R.id.waze).setOnClickListener(v->navigate(true));
         findViewById(R.id.openSpotify).setOnClickListener(v->openPackage("com.spotify.music"));
@@ -66,6 +68,7 @@ mapWeb.loadUrl("https://www.openstreetmap.org/export/embed.html?bbox=21.00%2C55.
         findViewById(R.id.resetTrip).setOnClickListener(v->resetTrip());
         findViewById(R.id.testTft).setOnClickListener(v->testTft());
         findViewById(R.id.autoDiscover).setOnClickListener(v->autoDiscover());
+        findViewById(R.id.deepScan).setOnClickListener(v->deepScan());
         findViewById(R.id.startCast).setOnClickListener(v->requestCast());
         findViewById(R.id.stopCast).setOnClickListener(v->{
             stopService(new Intent(this, CastService.class));
@@ -316,6 +319,81 @@ private void autoDiscover() {
         }
     }).start();
 }
+
+
+    private void deepScan() {
+        final String ip = castIp.getText().toString().trim();
+
+        if (ip.isEmpty()) {
+            castStatus.setText("Įvesk TFT IP adresą");
+            return;
+        }
+
+        castStatus.setText("Gilus skenavimas: " + ip);
+        discoveryLog.setText("Tikrinami TCP portai 1–12000...\n");
+
+        final int startPort = 1;
+        final int endPort = 12000;
+        final int workerCount = 48;
+        final AtomicInteger nextPort = new AtomicInteger(startPort);
+        final AtomicInteger activeWorkers = new AtomicInteger(workerCount);
+        final ConcurrentLinkedQueue<Integer> openPorts = new ConcurrentLinkedQueue<>();
+
+        ExecutorService pool = Executors.newFixedThreadPool(workerCount);
+
+        for (int w = 0; w < workerCount; w++) {
+            pool.execute(() -> {
+                try {
+                    while (true) {
+                        int port = nextPort.getAndIncrement();
+                        if (port > endPort) break;
+
+                        try (Socket socket = new Socket()) {
+                            socket.connect(new InetSocketAddress(ip, port), 80);
+                            openPorts.add(port);
+
+                            final int foundPort = port;
+                            runOnUiThread(() -> {
+                                discoveryLog.append("ATVIRAS: " + ip + ":" + foundPort + "\n");
+                                castPort.setText(String.valueOf(foundPort));
+                            });
+                        } catch (Exception ignored) {
+                        }
+
+                        if (port % 250 == 0) {
+                            final int current = port;
+                            runOnUiThread(() ->
+                                castStatus.setText("Tikrinama: " + Math.min(current, endPort) + " / " + endPort)
+                            );
+                        }
+                    }
+                } finally {
+                    if (activeWorkers.decrementAndGet() == 0) {
+                        pool.shutdown();
+
+                        runOnUiThread(() -> {
+                            if (openPorts.isEmpty()) {
+                                castStatus.setText("Atvirų TCP portų 1–12000 nerasta");
+                                discoveryLog.append("\nBaigta. Atvirų TCP portų nerasta.");
+                            } else {
+                                ArrayList<Integer> sorted = new ArrayList<>(openPorts);
+                                Collections.sort(sorted);
+
+                                StringBuilder result = new StringBuilder("\nRasti portai: ");
+                                for (int i = 0; i < sorted.size(); i++) {
+                                    if (i > 0) result.append(", ");
+                                    result.append(sorted.get(i));
+                                }
+
+                                discoveryLog.append(result.toString());
+                                castStatus.setText("Gilus skenavimas baigtas: rasta " + sorted.size());
+                            }
+                        });
+                    }
+                }
+            });
+        }
+    }
 
     @Override public void onProviderEnabled(String p){}
     @Override public void onProviderDisabled(String p){}
