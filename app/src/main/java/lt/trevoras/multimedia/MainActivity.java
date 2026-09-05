@@ -15,7 +15,9 @@ import android.provider.Settings;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -37,9 +39,19 @@ public class MainActivity extends Activity implements LocationListener {
     TextView heroDate, heroClock, weatherTemp, weatherCity, weatherDesc;
     TextView tftBadgeText, tftDot, settingsButton;
     TextView navInstruction, navNextDistance, navDistance, navEta, navAvgSpeed;
+    TextView serviceRemaining, serviceNext, fuelPercent, fuelInfo;
+    Button serviceDone;
+    ProgressBar fuelProgress;
 
     WebView mapWeb;
     EditText destination, castIp, castPort;
+
+    SharedPreferences prefs;
+    double bikeOdometerKm = 0;
+    double serviceDueKm = -1;
+    int serviceIntervalKm = 1000;
+    long serviceDueDateMs = 0;
+    int fuelLevel = -1;
 
     LocationManager lm;
     Location lastLocation;
@@ -97,6 +109,20 @@ public class MainActivity extends Activity implements LocationListener {
         navEta = findViewById(R.id.navEta);
         navAvgSpeed = findViewById(R.id.navAvgSpeed);
 
+        serviceRemaining = findViewById(R.id.serviceRemaining);
+        serviceNext = findViewById(R.id.serviceNext);
+        serviceDone = findViewById(R.id.serviceDone);
+        fuelPercent = findViewById(R.id.fuelPercent);
+        fuelInfo = findViewById(R.id.fuelInfo);
+        fuelProgress = findViewById(R.id.fuelProgress);
+
+        prefs = getSharedPreferences("trevoras_prefs", MODE_PRIVATE);
+        bikeOdometerKm = prefs.getFloat("bikeOdometerKm", 0f);
+        serviceDueKm = prefs.getFloat("serviceDueKm", -1f);
+        serviceIntervalKm = prefs.getInt("serviceIntervalKm", 1000);
+        serviceDueDateMs = prefs.getLong("serviceDueDateMs", 0L);
+        fuelLevel = prefs.getInt("fuelLevel", -1);
+
         lm = (LocationManager) getSystemService(LOCATION_SERVICE);
         mpm = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
 
@@ -126,6 +152,8 @@ public class MainActivity extends Activity implements LocationListener {
 
         refreshTrip();
         updateLiveClock();
+        updateServiceUi();
+        updateFuelUi();
 
         findViewById(R.id.googleMaps).setOnClickListener(v -> showRouteInApp());
         findViewById(R.id.waze).setOnClickListener(v -> navigate(true));
@@ -144,6 +172,18 @@ public class MainActivity extends Activity implements LocationListener {
 
         findViewById(R.id.startTrip).setOnClickListener(v -> startTrip());
         findViewById(R.id.resetTrip).setOnClickListener(v -> resetTrip());
+
+        if (serviceRemaining != null) {
+            serviceRemaining.setOnClickListener(v -> showServiceSetup());
+        }
+
+        if (serviceDone != null) {
+            serviceDone.setOnClickListener(v -> completeService());
+        }
+
+        if (fuelPercent != null) {
+            fuelPercent.setOnClickListener(v -> showFuelSetup());
+        }
 
         findViewById(R.id.testTft).setOnClickListener(v -> testTft());
         findViewById(R.id.autoDiscover).setOnClickListener(v -> {
@@ -289,7 +329,15 @@ public class MainActivity extends Activity implements LocationListener {
             float d = lastLocation.distanceTo(l);
 
             if (d >= 1 && d < 500) {
-                tripKm += d / 1000.0;
+                double deltaKm = d / 1000.0;
+                tripKm += deltaKm;
+                bikeOdometerKm += deltaKm;
+
+                if (prefs != null) {
+                    prefs.edit()
+                            .putFloat("bikeOdometerKm", (float) bikeOdometerKm)
+                            .apply();
+                }
             }
         }
 
@@ -672,6 +720,172 @@ public class MainActivity extends Activity implements LocationListener {
         maxspeed.setText(
                 Math.round(maxKmh) + " km/h"
         );
+
+        updateServiceUi();
+    }
+
+    void updateServiceUi() {
+        if (serviceRemaining == null || serviceNext == null) return;
+
+        if (serviceDueKm < 0 && serviceDueDateMs <= 0) {
+            serviceRemaining.setText("Nenustatyta");
+            serviceNext.setText("Paliesk „Nenustatyta“ ir įvesk ridą");
+            return;
+        }
+
+        double kmLeft = serviceDueKm - bikeOdometerKm;
+        long now = System.currentTimeMillis();
+        long daysLeft = serviceDueDateMs > 0
+                ? (long) Math.ceil((serviceDueDateMs - now) / 86400000.0)
+                : Long.MAX_VALUE;
+
+        if (kmLeft <= 0 || daysLeft <= 0) {
+            serviceRemaining.setText("SERVISAS DABAR");
+        } else if (daysLeft != Long.MAX_VALUE && daysLeft < 30) {
+            serviceRemaining.setText("Liko " + daysLeft + " d.");
+        } else {
+            serviceRemaining.setText("Liko " + Math.max(0, Math.round(kmLeft)) + " km");
+        }
+
+        String dateText = serviceDueDateMs > 0
+                ? new SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+                    .format(new Date(serviceDueDateMs))
+                : "—";
+
+        String kmText = serviceDueKm >= 0
+                ? Math.round(serviceDueKm) + " km"
+                : "— km";
+
+        serviceNext.setText("Kitas: " + kmText + " / " + dateText);
+    }
+
+    void showServiceSetup() {
+        final android.widget.LinearLayout box = new android.widget.LinearLayout(this);
+        box.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int pad = (int) (18 * getResources().getDisplayMetrics().density);
+        box.setPadding(pad, pad / 2, pad, 0);
+
+        final EditText odoInput = new EditText(this);
+        odoInput.setHint("Dabartinė motociklo rida, km");
+        odoInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER |
+                android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        odoInput.setText(String.format(Locale.US, "%.0f", bikeOdometerKm));
+        box.addView(odoInput);
+
+        final EditText intervalInput = new EditText(this);
+        intervalInput.setHint("Serviso intervalas, km");
+        intervalInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        intervalInput.setText(String.valueOf(serviceIntervalKm));
+        box.addView(intervalInput);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Serviso nustatymai")
+                .setMessage("Įvesk dabartinę ridą ir po kiek kilometrų priminti kitą servisą. Datos terminas bus 12 mėn.")
+                .setView(box)
+                .setPositiveButton("IŠSAUGOTI", (dialog, which) -> {
+                    try {
+                        double odo = Double.parseDouble(
+                                odoInput.getText().toString().trim().replace(',', '.'));
+                        int interval = Integer.parseInt(
+                                intervalInput.getText().toString().trim());
+
+                        if (odo < 0 || interval <= 0) throw new Exception();
+
+                        bikeOdometerKm = odo;
+                        serviceIntervalKm = interval;
+                        serviceDueKm = bikeOdometerKm + serviceIntervalKm;
+
+                        Calendar c = Calendar.getInstance();
+                        c.add(Calendar.MONTH, 12);
+                        serviceDueDateMs = c.getTimeInMillis();
+
+                        prefs.edit()
+                                .putFloat("bikeOdometerKm", (float) bikeOdometerKm)
+                                .putInt("serviceIntervalKm", serviceIntervalKm)
+                                .putFloat("serviceDueKm", (float) serviceDueKm)
+                                .putLong("serviceDueDateMs", serviceDueDateMs)
+                                .apply();
+
+                        updateServiceUi();
+                        Toast.makeText(this, "Serviso priminimas išsaugotas",
+                                Toast.LENGTH_SHORT).show();
+
+                    } catch (Exception e) {
+                        Toast.makeText(this, "Patikrink įvestą ridą ir intervalą",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("ATŠAUKTI", null)
+                .show();
+    }
+
+    void completeService() {
+        new AlertDialog.Builder(this)
+                .setTitle("Servisas atliktas?")
+                .setMessage("Pažymėti servisą atliktu ir suplanuoti kitą po " +
+                        serviceIntervalKm + " km arba 12 mėn.?")
+                .setPositiveButton("TAIP", (dialog, which) -> {
+                    serviceDueKm = bikeOdometerKm + serviceIntervalKm;
+
+                    Calendar c = Calendar.getInstance();
+                    c.add(Calendar.MONTH, 12);
+                    serviceDueDateMs = c.getTimeInMillis();
+
+                    prefs.edit()
+                            .putFloat("serviceDueKm", (float) serviceDueKm)
+                            .putLong("serviceDueDateMs", serviceDueDateMs)
+                            .apply();
+
+                    updateServiceUi();
+                    Toast.makeText(this, "Servisas pažymėtas atliktu",
+                            Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("NE", null)
+                .show();
+    }
+
+    void updateFuelUi() {
+        if (fuelPercent == null || fuelInfo == null || fuelProgress == null) return;
+
+        if (fuelLevel < 0) {
+            fuelPercent.setText("— %");
+            fuelProgress.setProgress(0);
+            fuelInfo.setText("Paliesk „— %“ ir įvesk kuro lygį");
+        } else {
+            fuelPercent.setText(fuelLevel + " %");
+            fuelProgress.setProgress(fuelLevel);
+            fuelInfo.setText("Įvesta rankiniu būdu");
+        }
+    }
+
+    void showFuelSetup() {
+        final EditText input = new EditText(this);
+        input.setHint("0–100");
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        if (fuelLevel >= 0) input.setText(String.valueOf(fuelLevel));
+
+        int pad = (int) (24 * getResources().getDisplayMetrics().density);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Kuro lygis")
+                .setMessage("Kol kas TFT kuro duomenų dar neskaitome automatiškai. Įvesk apytikslį kuro lygį procentais.")
+                .setView(input, pad, 0, pad, 0)
+                .setPositiveButton("IŠSAUGOTI", (dialog, which) -> {
+                    try {
+                        int value = Integer.parseInt(input.getText().toString().trim());
+                        if (value < 0 || value > 100) throw new Exception();
+
+                        fuelLevel = value;
+                        prefs.edit().putInt("fuelLevel", fuelLevel).apply();
+                        updateFuelUi();
+
+                    } catch (Exception e) {
+                        Toast.makeText(this, "Įvesk skaičių nuo 0 iki 100",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("ATŠAUKTI", null)
+                .show();
     }
 
     void updateTripTime() {
@@ -1449,4 +1663,4 @@ public class MainActivity extends Activity implements LocationListener {
     @Override public void onProviderEnabled(String p) {}
     @Override public void onProviderDisabled(String p) {}
     @Override public void onStatusChanged(String p, int s, Bundle b) {}
-    }
+}
