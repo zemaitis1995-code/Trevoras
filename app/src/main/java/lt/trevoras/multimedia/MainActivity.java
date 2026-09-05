@@ -183,8 +183,11 @@ public class MainActivity extends Activity implements LocationListener {
             int p=8888; try{p=Integer.parseInt(castPort.getText().toString());}catch(Exception ignored){}
             s.putExtra("port",p);
             startForegroundService(s);
-            castStatus.setText("Eksperimentinė H.264 projekcija paleista");
-        }private void autoDiscover() {
+          castStatus.setText("Eksperimentinė H.264 projekcija paleista");
+    }
+}
+
+private void autoDiscover() {
     castStatus.setText("🔍 TFT skenavimas pradėtas...");
 
     new Thread(() -> {
