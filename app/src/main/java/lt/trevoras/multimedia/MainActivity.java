@@ -23,7 +23,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class MainActivity extends Activity implements LocationListener {
-    TextView speed, trip, maxspeed, time, heading, track, artist, castStatus, subtitle;
+    TextView speed, trip, maxspeed, time, heading, track, artist, castStatus, subtitle, WebView mapWeb;
     EditText destination, castIp, castPort;
     LocationManager lm;
     Location lastLocation;
@@ -44,7 +44,7 @@ public class MainActivity extends Activity implements LocationListener {
         destination=findViewById(R.id.destination); castIp=findViewById(R.id.castIp); castPort=findViewById(R.id.castPort);
         lm=(LocationManager)getSystemService(LOCATION_SERVICE);
         mpm=(MediaProjectionManager)getSystemService(MEDIA_PROJECTION_SERVICE);
-        WebView mapWeb = findViewById(R.id.mapWeb);
+        mapWeb = findViewById(R.id.mapWeb);
 WebSettings mapSettings = mapWeb.getSettings();
 mapSettings.setJavaScriptEnabled(true);
 mapSettings.setDomStorageEnabled(true);
@@ -97,8 +97,24 @@ mapWeb.loadUrl("https://www.openstreetmap.org/export/embed.html?bbox=21.00%2C55.
             float d=lastLocation.distanceTo(l);
             if(d<500) tripKm += d/1000.0;
         }
-        lastLocation=l; refreshTrip();
-    }
+        lastLocation=l;
+refreshTrip();
+
+double lat = l.getLatitude();
+double lon = l.getLongitude();
+
+String mapUrl =
+        "https://www.openstreetmap.org/export/embed.html?bbox=" +
+        (lon - 0.025) + "%2C" +
+        (lat - 0.015) + "%2C" +
+        (lon + 0.025) + "%2C" +
+        (lat + 0.015) +
+        "&layer=mapnik&marker=" + lat + "%2C" + lon;
+
+if (mapWeb != null) {
+    mapWeb.loadUrl(mapUrl);
+}
+}
 
     String bearingName(float b){
         String[] n={"Š","ŠR","R","PR","P","PV","V","ŠV"};
