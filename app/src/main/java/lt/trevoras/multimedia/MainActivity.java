@@ -53,6 +53,7 @@ public class MainActivity extends Activity implements LocationListener {
         findViewById(R.id.startTrip).setOnClickListener(v->startTrip());
         findViewById(R.id.resetTrip).setOnClickListener(v->resetTrip());
         findViewById(R.id.testTft).setOnClickListener(v->testTft());
+        findViewById(R.id.autoDiscover).setOnClickListener(v->autoDiscover());
         findViewById(R.id.startCast).setOnClickListener(v->requestCast());
         findViewById(R.id.stopCast).setOnClickListener(v->{
             stopService(new Intent(this, CastService.class));
@@ -183,8 +184,107 @@ public class MainActivity extends Activity implements LocationListener {
             s.putExtra("port",p);
             startForegroundService(s);
             castStatus.setText("Eksperimentinė H.264 projekcija paleista");
+        }private void autoDiscover() {
+    castStatus.setText("🔍 TFT skenavimas pradėtas...");
+
+    new Thread(() -> {
+        try {
+            LinkedHashSet<String> prefixes = new LinkedHashSet<>();
+
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface ni = interfaces.nextElement();
+                Enumeration<InetAddress> addresses = ni.getInetAddresses();
+
+                while (addresses.hasMoreElements()) {
+                    InetAddress addr = addresses.nextElement();
+
+                    if (addr instanceof Inet4Address && !addr.isLoopbackAddress()) {
+                        String ip = addr.getHostAddress();
+
+                        if (ip.startsWith("192.168.") ||
+                                ip.startsWith("10.") ||
+                                ip.startsWith("172.")) {
+
+                            int lastDot = ip.lastIndexOf(".");
+                            if (lastDot > 0) {
+                                prefixes.add(ip.substring(0, lastDot));
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Dažniausi Android hotspot tinklai
+            prefixes.add("192.168.43");
+            prefixes.add("192.168.1");
+            prefixes.add("192.168.0");
+
+            int[] ports = {
+                    7236, 8000, 8080, 8888,
+                    8899, 9000, 9999, 10000,
+                    5000, 5555, 7000, 8554
+            };
+
+            for (String prefix : prefixes) {
+
+                for (int host = 2; host <= 254; host++) {
+
+                    String ip = prefix + "." + host;
+
+                    if (host % 10 == 0) {
+                        runOnUiThread(() ->
+                                castStatus.setText("🔍 Tikrinama: " + ip)
+                        );
+                    }
+
+                    for (int port : ports) {
+
+                        try {
+                            Socket socket = new Socket();
+                            socket.connect(
+                                    new InetSocketAddress(ip, port),
+                                    100
+                            );
+                            socket.close();
+
+                            final String foundIp = ip;
+                            final int foundPort = port;
+
+                            runOnUiThread(() -> {
+                                castIp.setText(foundIp);
+                                castPort.setText(String.valueOf(foundPort));
+                                castStatus.setText(
+                                        "✅ Rastas įrenginys: " +
+                                                foundIp + ":" + foundPort
+                                );
+                            });
+
+                            return;
+
+                        } catch (Exception ignored) {
+                        }
+                    }
+                }
+            }
+
+            runOnUiThread(() ->
+                    castStatus.setText(
+                            "❌ TFT nerastas. Hotspot palik įjungtą ir Trevorą prijungtą."
+                    )
+            );
+
+        } catch (Exception e) {
+
+            runOnUiThread(() ->
+                    castStatus.setText(
+                            "❌ Skenavimo klaida: " + e.getMessage()
+                    )
+            );
         }
-    }
+    }).start();
+}
 
     @Override public void onProviderEnabled(String p){}
     @Override public void onProviderDisabled(String p){}
