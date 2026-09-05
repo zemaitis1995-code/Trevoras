@@ -20,6 +20,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -35,6 +36,7 @@ public class MainActivity extends Activity implements LocationListener {
     TextView castStatus, subtitle, discoveryLog;
     TextView heroDate, heroClock, weatherTemp, weatherCity, weatherDesc;
     TextView tftBadgeText, tftDot, settingsButton;
+    TextView navInstruction, navNextDistance, navDistance, navEta, navAvgSpeed;
 
     WebView mapWeb;
     EditText destination, castIp, castPort;
@@ -57,6 +59,7 @@ public class MainActivity extends Activity implements LocationListener {
     long lastWeatherUpdate = 0;
     boolean tftVerifiedConnected = false;
     TrevorasWssClient wssClient;
+    boolean mapReady = false;
 
     @Override
     public void onCreate(Bundle b) {
@@ -88,36 +91,43 @@ public class MainActivity extends Activity implements LocationListener {
         tftDot = findViewById(R.id.tftDot);
         settingsButton = findViewById(R.id.settingsButton);
 
+        navInstruction = findViewById(R.id.navInstruction);
+        navNextDistance = findViewById(R.id.navNextDistance);
+        navDistance = findViewById(R.id.navDistance);
+        navEta = findViewById(R.id.navEta);
+        navAvgSpeed = findViewById(R.id.navAvgSpeed);
+
         lm = (LocationManager) getSystemService(LOCATION_SERVICE);
         mpm = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
 
         setupMap();
         setTftDisconnected();
+
         wssClient = new TrevorasWssClient(new TrevorasWssClient.Listener() {
+            @Override
+            public void onStatus(String text) {
+                runOnUiThread(() -> castStatus.setText(text));
+            }
 
-    @Override
-    public void onStatus(String text) {
-        runOnUiThread(() -> castStatus.setText(text));
-    }
+            @Override
+            public void onConnected(String deviceIp) {
+                runOnUiThread(() -> {
+                    castIp.setText(deviceIp);
+                    castPort.setText("9038");
+                    setTftConnected(deviceIp, 9038);
+                });
+            }
 
-    @Override
-    public void onConnected(String deviceIp) {
-        runOnUiThread(() -> {
-            castIp.setText(deviceIp);
-            castPort.setText("9038");
-            setTftConnected(deviceIp, 9038);
+            @Override
+            public void onDisconnected() {
+                runOnUiThread(() -> setTftDisconnected());
+            }
         });
-    }
 
-    @Override
-    public void onDisconnected() {
-        runOnUiThread(() -> setTftDisconnected());
-    }
-});
         refreshTrip();
         updateLiveClock();
 
-        findViewById(R.id.googleMaps).setOnClickListener(v -> navigate(false));
+        findViewById(R.id.googleMaps).setOnClickListener(v -> showRouteInApp());
         findViewById(R.id.waze).setOnClickListener(v -> navigate(true));
         findViewById(R.id.openSpotify).setOnClickListener(v -> openPackage("com.spotify.music"));
 
@@ -136,11 +146,11 @@ public class MainActivity extends Activity implements LocationListener {
         findViewById(R.id.resetTrip).setOnClickListener(v -> resetTrip());
 
         findViewById(R.id.testTft).setOnClickListener(v -> testTft());
-findViewById(R.id.autoDiscover).setOnClickListener(v -> {
-    setTftDisconnected();
-    castStatus.setText("Ieškoma TFT gamykliniu protokolu...");
-    wssClient.connectAsync();
-});
+        findViewById(R.id.autoDiscover).setOnClickListener(v -> {
+            setTftDisconnected();
+            castStatus.setText("Ieškoma TFT gamykliniu protokolu...");
+            if (wssClient != null) wssClient.connectAsync();
+        });
         findViewById(R.id.deepScan).setOnClickListener(v -> deepScan());
 
         findViewById(R.id.startCast).setOnClickListener(v -> requestCast());
@@ -166,12 +176,43 @@ findViewById(R.id.autoDiscover).setOnClickListener(v -> {
         mapSettings.setJavaScriptEnabled(true);
         mapSettings.setDomStorageEnabled(true);
 
-        mapWeb.setWebViewClient(new WebViewClient());
+        mapWeb.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                mapReady = true;
+                if (lastLocation != null) updateMap(lastLocation);
+            }
+        });
 
-        mapWeb.loadUrl(
-                "https://www.openstreetmap.org/export/embed.html" +
-                "?bbox=21.00%2C55.88%2C21.12%2C55.96" +
-                "&layer=mapnik&marker=55.917%2C21.068"
+        String html = "<!doctype html><html><head>" +
+                "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no'>" +
+                "<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>" +
+                "<style>html,body,#map{height:100%;margin:0;background:#eaf1f4;}" +
+                ".leaflet-control-attribution{font-size:8px;opacity:.62;}" +
+                ".leaflet-control-zoom{border:0!important;box-shadow:0 3px 12px rgba(0,0,0,.18)!important;}" +
+                ".leaflet-control-zoom a{width:40px!important;height:40px!important;line-height:40px!important;font-size:24px!important;color:#17232d!important;}" +
+                ".bikeMarker{width:34px;height:34px;border-radius:50%;background:#fff;border:3px solid #2196F3;box-shadow:0 3px 10px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;}" +
+                ".bikeArrow{width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:22px solid #2196F3;transform-origin:50% 60%;}" +
+                "</style></head><body><div id='map'></div>" +
+                "<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>" +
+                "<script>" +
+                "var map=L.map('map',{zoomControl:true}).setView([55.917,21.068],13);" +
+                "map.zoomControl.setPosition('topright');" +
+                "L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);" +
+                "var icon=L.divIcon({className:'',html:'<div class=\"bikeMarker\"><div id=\"arrow\" class=\"bikeArrow\"></div></div>',iconSize:[40,40],iconAnchor:[20,20]});" +
+                "var marker=L.marker([55.917,21.068],{icon:icon}).addTo(map);" +
+                "var trail=L.polyline([],{color:'#2196F3',weight:6,opacity:.92}).addTo(map);" +
+                "var route=L.polyline([],{color:'#0B84FF',weight:7,opacity:.95}).addTo(map);" +
+                "function setPosition(lat,lon,bearing){marker.setLatLng([lat,lon]);trail.addLatLng([lat,lon]);map.panTo([lat,lon],{animate:true});var a=document.getElementById('arrow');if(a)a.style.transform='rotate('+bearing+'deg)';}" +
+                "function setRoute(points){route.setLatLngs(points);if(points&&points.length>1)map.fitBounds(route.getBounds(),{padding:[35,35]});}" +
+                "</script></body></html>";
+
+        mapWeb.loadDataWithBaseURL(
+                "https://trevoras.local/",
+                html,
+                "text/html",
+                "UTF-8",
+                null
         );
     }
 
@@ -264,22 +305,168 @@ findViewById(R.id.autoDiscover).setOnClickListener(v -> {
     }
 
     void updateMap(Location l) {
+        if (mapWeb == null || !mapReady) return;
 
         double lat = l.getLatitude();
         double lon = l.getLongitude();
+        float bearing = l.hasBearing() ? l.getBearing() : 0f;
 
-        String mapUrl =
-                "https://www.openstreetmap.org/export/embed.html?bbox=" +
-                (lon - 0.025) + "%2C" +
-                (lat - 0.015) + "%2C" +
-                (lon + 0.025) + "%2C" +
-                (lat + 0.015) +
-                "&layer=mapnik&marker=" +
-                lat + "%2C" + lon;
+        String js = String.format(
+                Locale.US,
+                "javascript:setPosition(%.7f,%.7f,%.1f)",
+                lat, lon, bearing
+        );
 
-        if (mapWeb != null) {
-            mapWeb.loadUrl(mapUrl);
+        mapWeb.evaluateJavascript(js, null);
+
+        long sec = accumulatedTripSeconds;
+        if (tripRunning && tripStart > 0) {
+            sec += (System.currentTimeMillis() - tripStart) / 1000;
         }
+
+        double avg = sec > 0 ? tripKm / (sec / 3600.0) : 0;
+        if (navAvgSpeed != null) {
+            navAvgSpeed.setText(Math.round(avg) + " km/h");
+        }
+    }
+
+    void showRouteInApp() {
+        String q = destination.getText().toString().trim();
+
+        if (q.isEmpty()) {
+            Toast.makeText(this, "Įrašyk kelionės tikslą", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (lastLocation == null) {
+            Toast.makeText(this, "Dar laukiama GPS vietos", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (navInstruction != null) navInstruction.setText("Skaičiuojamas maršrutas…");
+        if (navNextDistance != null) navNextDistance.setText(q);
+
+        final double fromLat = lastLocation.getLatitude();
+        final double fromLon = lastLocation.getLongitude();
+
+        Executors.newSingleThreadExecutor().execute(() -> {
+            try {
+                String geoUrl = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" +
+                        URLEncoder.encode(q, "UTF-8");
+
+                HttpURLConnection geoCon = (HttpURLConnection) new URL(geoUrl).openConnection();
+                geoCon.setConnectTimeout(7000);
+                geoCon.setReadTimeout(7000);
+                geoCon.setRequestProperty("User-Agent", "TREVORAS-Android/1.0");
+
+                String geoBody = readAll(geoCon);
+                JSONArray geo = new JSONArray(geoBody);
+
+                if (geo.length() == 0) throw new Exception("Vieta nerasta");
+
+                JSONObject place = geo.getJSONObject(0);
+                double toLat = place.getDouble("lat");
+                double toLon = place.getDouble("lon");
+
+                String routeUrl = String.format(
+                        Locale.US,
+                        "https://router.project-osrm.org/route/v1/driving/%.7f,%.7f;%.7f,%.7f?overview=full&geometries=geojson&steps=true",
+                        fromLon, fromLat, toLon, toLat
+                );
+
+                HttpURLConnection routeCon = (HttpURLConnection) new URL(routeUrl).openConnection();
+                routeCon.setConnectTimeout(9000);
+                routeCon.setReadTimeout(9000);
+                routeCon.setRequestProperty("User-Agent", "TREVORAS-Android/1.0");
+
+                JSONObject root = new JSONObject(readAll(routeCon));
+                JSONArray routes = root.getJSONArray("routes");
+                if (routes.length() == 0) throw new Exception("Maršrutas nerastas");
+
+                JSONObject route = routes.getJSONObject(0);
+                double meters = route.getDouble("distance");
+                double seconds = route.getDouble("duration");
+
+                JSONArray coords = route.getJSONObject("geometry").getJSONArray("coordinates");
+                StringBuilder points = new StringBuilder("[");
+                for (int i = 0; i < coords.length(); i++) {
+                    JSONArray c = coords.getJSONArray(i);
+                    if (i > 0) points.append(',');
+                    points.append('[').append(c.getDouble(1)).append(',').append(c.getDouble(0)).append(']');
+                }
+                points.append(']');
+
+                String instruction = "Važiuokite maršrutu";
+                String nextDistance = "";
+
+                try {
+                    JSONArray legs = route.getJSONArray("legs");
+                    JSONArray steps = legs.getJSONObject(0).getJSONArray("steps");
+                    if (steps.length() > 1) {
+                        JSONObject step = steps.getJSONObject(1);
+                        JSONObject maneuver = step.getJSONObject("maneuver");
+                        String type = maneuver.optString("type", "turn");
+                        String modifier = maneuver.optString("modifier", "");
+                        instruction = maneuverLt(type, modifier);
+                        nextDistance = formatDistance(step.optDouble("distance", 0));
+                    }
+                } catch (Exception ignored) {}
+
+                final String fInstruction = instruction;
+                final String fNextDistance = nextDistance;
+                final String fPoints = points.toString();
+                final String totalDistance = formatDistance(meters);
+                final String eta = formatDuration(seconds);
+
+                runOnUiThread(() -> {
+                    if (mapWeb != null) {
+                        mapWeb.evaluateJavascript("javascript:setRoute(" + fPoints + ")", null);
+                    }
+                    if (navInstruction != null) navInstruction.setText(fInstruction);
+                    if (navNextDistance != null) navNextDistance.setText(fNextDistance);
+                    if (navDistance != null) navDistance.setText(totalDistance);
+                    if (navEta != null) navEta.setText(eta);
+                });
+
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (navInstruction != null) navInstruction.setText("Maršruto apskaičiuoti nepavyko");
+                    if (navNextDistance != null) navNextDistance.setText(e.getMessage() == null ? "" : e.getMessage());
+                    Toast.makeText(this, "Navigacijos klaida", Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
+    }
+
+    String readAll(HttpURLConnection con) throws Exception {
+        BufferedReader br = new BufferedReader(new InputStreamReader(con.getInputStream()));
+        StringBuilder sb = new StringBuilder();
+        String line;
+        while ((line = br.readLine()) != null) sb.append(line);
+        br.close();
+        return sb.toString();
+    }
+
+    String maneuverLt(String type, String modifier) {
+        if ("arrive".equals(type)) return "Atvykote į kelionės tikslą";
+        if (modifier.contains("left")) return "Sukite į kairę";
+        if (modifier.contains("right")) return "Sukite į dešinę";
+        if ("roundabout".equals(type) || "rotary".equals(type)) return "Įvažiuokite į žiedą";
+        if ("merge".equals(type)) return "Įsiliekite į eismą";
+        return "Važiuokite tiesiai";
+    }
+
+    String formatDistance(double meters) {
+        if (meters < 1000) return Math.round(meters) + " m";
+        return String.format(Locale.US, "%.1f km", meters / 1000.0);
+    }
+
+    String formatDuration(double seconds) {
+        long total = Math.max(0, Math.round(seconds));
+        long h = total / 3600;
+        long m = (total % 3600) / 60;
+        if (h > 0) return String.format(Locale.US, "%d:%02d", h, m);
+        return m + " min";
     }
 
     void updateWeather(Location l) {
@@ -1252,10 +1439,13 @@ findViewById(R.id.autoDiscover).setOnClickListener(v -> {
             lm.removeUpdates(this);
         } catch (Exception ignored) {}
 
+        try {
+            if (wssClient != null) wssClient.stop();
+        } catch (Exception ignored) {}
+
         super.onDestroy();
     }
 
     @Override public void onProviderEnabled(String p) {}
     @Override public void onProviderDisabled(String p) {}
     @Override public void onStatusChanged(String p, int s, Bundle b) {}
-}
