@@ -8,7 +8,7 @@ android {
         applicationId = "lt.trevoras.multimedia"
         minSdk = 28
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.9"
+        versionCode = 3
+        versionName = "0.11"
     }
 }
