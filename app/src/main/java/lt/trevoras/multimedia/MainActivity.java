@@ -1449,3 +1449,4 @@ public class MainActivity extends Activity implements LocationListener {
     @Override public void onProviderEnabled(String p) {}
     @Override public void onProviderDisabled(String p) {}
     @Override public void onStatusChanged(String p, int s, Bundle b) {}
+    }
