@@ -1,748 +1,139 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="#F4F8FB">
-
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:fillViewport="true"
-        android:scrollbars="none">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
-
-            <!-- HEADER -->
-<LinearLayout
-    android:layout_width="match_parent"
-    android:layout_height="78dp"
-    android:orientation="horizontal"
-    android:gravity="center_vertical"
-    android:paddingLeft="18dp"
-    android:paddingRight="18dp">
-
-    <!-- NUSTATYMAI -->
-    <TextView
-        android:id="@+id/settingsButton"
-        android:layout_width="46dp"
-        android:layout_height="46dp"
-        android:gravity="center"
-        android:text="⚙"
-        android:textSize="26sp"
-        android:textColor="#263640"
-        android:background="@drawable/chip_white"/>
-
-    <!-- LOGOTIPAS -->
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:gravity="center">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="TREVORAS"
-            android:textColor="#14202B"
-            android:textSize="28sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.08"/>
-
-        <TextView
-            android:id="@+id/subtitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="— ANTANAS EDITION —"
-            android:textColor="#8794A0"
-            android:textSize="9sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.18"/>
-    </LinearLayout>
-
-    <!-- TFT BŪSENA -->
-    <LinearLayout
-        android:layout_width="98dp"
-        android:layout_height="44dp"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:background="@drawable/tft_badge_bg">
-
-        <TextView
-            android:id="@+id/tftDot"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="●"
-            android:textColor="#9AA6AF"
-            android:textSize="14sp"/>
-
-        <TextView
-            android:id="@+id/tftBadgeText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginLeft="5dp"
-            android:text="TFT&#10;NEPRIJUNGTAS"
-            android:gravity="center"
-            android:textColor="#293640"
-            android:textSize="8sp"
-            android:textStyle="bold"/>
-    </LinearLayout>
-
+This XML file does not appear to have any style information associated with it. The document tree is shown below.
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:background="#F3F6F8">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingBottom="24dp">
+<!--  HERO  -->
+<FrameLayout android:layout_width="match_parent" android:layout_height="520dp">
+<ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:src="@drawable/trevoras_hero" android:scaleType="centerCrop" android:contentDescription="Trevoras"/>
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_gravity="top" android:gravity="center_vertical" android:orientation="horizontal" android:paddingLeft="18dp" android:paddingTop="12dp" android:paddingRight="18dp">
+<TextView android:id="@+id/settingsButton" android:layout_width="54dp" android:layout_height="54dp" android:background="@drawable/chip_white" android:elevation="5dp" android:gravity="center" android:text="⚙" android:textColor="#14202B" android:textSize="27sp"/>
+<LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="TREVORAS" android:textColor="#111D29" android:textSize="30sp" android:textStyle="bold"/>
+<TextView android:id="@+id/subtitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="— ANTANAS EDITION —" android:textColor="#6D7A86" android:textSize="11sp" android:textStyle="bold"/>
 </LinearLayout>
-
-<!-- HERO -->
-<FrameLayout
-    android:layout_width="match_parent"
-    android:layout_height="330dp">
-
-    <!-- PAJŪRIO FONAS -->
-    <ImageView
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:src="@drawable/trevoras_hero"
-    android:scaleType="centerCrop"
-    android:contentDescription="Trevoras"/>
-
-    <!-- LIVE ORAS -->
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|start"
-        android:layout_marginLeft="22dp"
-        android:layout_marginTop="18dp"
-        android:orientation="vertical"
-        android:padding="9dp"
-        android:background="@drawable/chip_white">
-
-        <TextView
-            android:id="@+id/weatherTemp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="☀  —°C"
-            android:textColor="#18242E"
-            android:textSize="18sp"
-            android:textStyle="bold"/>
-
-        <TextView
-            android:id="@+id/weatherCity"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Nustatoma vieta..."
-            android:textColor="#53616D"
-            android:textSize="12sp"/>
-
-        <TextView
-            android:id="@+id/weatherDesc"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Orų duomenys"
-            android:textColor="#7E8C98"
-            android:textSize="10sp"/>
-
-    </LinearLayout>
-
-    <!-- LIVE DATA IR LAIKAS -->
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|end"
-        android:layout_marginRight="22dp"
-        android:layout_marginTop="18dp"
-        android:orientation="vertical"
-        android:gravity="end"
-        android:padding="9dp"
-        android:background="@drawable/chip_white">
-
-        <TextView
-            android:id="@+id/heroDate"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="---- -- --"
-            android:textColor="#53616D"
-            android:textSize="10sp"/>
-
-        <TextView
-            android:id="@+id/heroClock"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="--:--"
-            android:textColor="#18242E"
-            android:textSize="18sp"
-            android:textStyle="bold"/>
-
-    </LinearLayout>
-
+<LinearLayout android:layout_width="124dp" android:layout_height="54dp" android:background="@drawable/tft_badge_bg" android:elevation="4dp" android:gravity="center" android:orientation="horizontal" android:padding="8dp">
+<TextView android:id="@+id/tftDot" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textColor="#9AA6AF" android:textSize="13sp"/>
+<TextView android:id="@+id/tftBadgeText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="7dp" android:gravity="center" android:text="TFT\nNEPRIJUNGTAS" android:textColor="#17232D" android:textSize="10sp" android:textStyle="bold"/>
+</LinearLayout>
+</LinearLayout>
+<LinearLayout android:layout_width="142dp" android:layout_height="112dp" android:layout_gravity="top|start" android:layout_marginLeft="24dp" android:layout_marginTop="92dp" android:background="@drawable/chip_white" android:elevation="4dp" android:orientation="vertical" android:padding="12dp">
+<TextView android:id="@+id/weatherTemp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="☁ —°C" android:textColor="#17232D" android:textSize="22sp" android:textStyle="bold"/>
+<TextView android:id="@+id/weatherCity" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="5dp" android:text="Vieta…" android:textColor="#52616E" android:textSize="16sp"/>
+<TextView android:id="@+id/weatherDesc" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Orų duomenys" android:textColor="#7A8792" android:textSize="12sp"/>
+</LinearLayout>
+<LinearLayout android:layout_width="124dp" android:layout_height="96dp" android:layout_gravity="top|end" android:layout_marginTop="92dp" android:layout_marginRight="24dp" android:background="@drawable/chip_white" android:elevation="4dp" android:gravity="center" android:orientation="vertical" android:padding="10dp">
+<TextView android:id="@+id/heroDate" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="---- -- --" android:textColor="#64727E" android:textSize="12sp"/>
+<TextView android:id="@+id/heroClock" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="--:--" android:textColor="#17232D" android:textSize="23sp" android:textStyle="bold"/>
+</LinearLayout>
 </FrameLayout>
-            <!-- STATS -->
-<LinearLayout
-    android:layout_width="match_parent"
-    android:layout_height="92dp"
-    android:layout_marginLeft="18dp"
-    android:layout_marginRight="18dp"
-    android:layout_marginTop="-12dp"
-    android:orientation="horizontal"
-    android:gravity="center"
-    android:elevation="6dp"
-    android:background="@drawable/card_white_rounded">
-
-    <!-- KELIONĖ -->
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp">
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_trip"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="7dp"
-                android:text="Kelionė"
-                android:textColor="#788691"
-                android:textSize="11sp"/>
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/trip"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="0.0 km"
-            android:textColor="#14222D"
-            android:textSize="20sp"
-            android:textStyle="bold"/>
-    </LinearLayout>
-
-    <View
-        android:layout_width="1dp"
-        android:layout_height="52dp"
-        android:background="#E5EBF0"/>
-
-    <!-- LAIKAS -->
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp">
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_time"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="7dp"
-                android:text="Laikas"
-                android:textColor="#788691"
-                android:textSize="11sp"/>
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/time"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="00:00"
-            android:textColor="#14222D"
-            android:textSize="20sp"
-            android:textStyle="bold"/>
-    </LinearLayout>
-
-    <View
-        android:layout_width="1dp"
-        android:layout_height="52dp"
-        android:background="#E5EBF0"/>
-
-    <!-- MAX GREITIS -->
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp">
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_speed"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="7dp"
-                android:text="MAX greitis"
-                android:textColor="#788691"
-                android:textSize="10sp"/>
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/maxspeed"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="0 km/h"
-            android:textColor="#14222D"
-            android:textSize="20sp"
-            android:textStyle="bold"/>
-    </LinearLayout>
-
-    <View
-        android:layout_width="1dp"
-        android:layout_height="52dp"
-        android:background="#E5EBF0"/>
-
-    <!-- AUKŠTIS -->
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp">
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_altitude"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="7dp"
-                android:text="Aukštis"
-                android:textColor="#788691"
-                android:textSize="11sp"/>
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/heading"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="— m"
-            android:textColor="#14222D"
-            android:textSize="20sp"
-            android:textStyle="bold"/>
-    </LinearLayout>
-
+<!--  hidden speed view retained for Java/GPS compatibility  -->
+<TextView android:id="@+id/speed" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone" android:text="0"/>
+<!--  STATS  -->
+<LinearLayout android:layout_width="match_parent" android:layout_height="96dp" android:layout_marginLeft="18dp" android:layout_marginRight="18dp" android:layout_marginTop="-20dp" android:background="@drawable/card_white_rounded" android:elevation="8dp" android:gravity="center" android:orientation="horizontal" android:paddingLeft="8dp" android:paddingRight="8dp">
+<LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+<ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_trip"/>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Kelionė" android:textColor="#7A8792" android:textSize="11sp"/>
+<TextView android:id="@+id/trip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="0.0 km" android:textColor="#17232D" android:textSize="20sp" android:textStyle="bold"/>
 </LinearLayout>
-            <!-- MAP -->
-            <TextView
-    android:id="@+id/speed"
-    android:layout_width="1dp"
-    android:layout_height="1dp"
-    android:visibility="gone"
-    android:text="0"/>
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="20dp"
-                android:layout_marginTop="18dp"
-                android:text="Žemėlapis"
-                android:textColor="#17232D"
-                android:textSize="24sp"
-                android:textStyle="bold"/>
-
-            <FrameLayout
-                android:layout_width="match_parent"
-                android:layout_height="245dp"
-                android:layout_marginLeft="18dp"
-                android:layout_marginRight="18dp"
-                android:layout_marginTop="10dp"
-                android:padding="8dp"
-                android:elevation="3dp"
-                android:background="@drawable/card_white_rounded">
-
-                <WebView
-                    android:id="@+id/mapWeb"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:background="#DDEEE6"/>
-
-                <EditText
-                    android:id="@+id/destination"
-                    android:layout_width="170dp"
-                    android:layout_height="48dp"
-                    android:layout_gravity="top|start"
-                    android:layout_margin="10dp"
-                    android:hint="📍 Palanga"
-                    android:singleLine="true"
-                    android:paddingLeft="14dp"
-                    android:paddingRight="12dp"
-                    android:textSize="12sp"
-                    android:background="@drawable/chip_white"/>
-
-                <Button
-                    android:id="@+id/googleMaps"
-                    android:layout_width="150dp"
-                    android:layout_height="54dp"
-                    android:layout_gravity="bottom|end"
-                    android:layout_margin="10dp"
-                    android:text="➤ NAVIGUOTI"
-                    android:textColor="#FFFFFF"
-                    android:textStyle="bold"
-                    android:background="@drawable/button_blue"/>
-
-                <Button
-                    android:id="@+id/waze"
-                    android:layout_width="1dp"
-                    android:layout_height="1dp"
-                    android:visibility="invisible"
-                    android:text="Waze"/>
-            </FrameLayout>
-
-            <!-- MUSIC -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="88dp"
-                android:layout_marginLeft="18dp"
-                android:layout_marginRight="18dp"
-                android:layout_marginTop="14dp"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:padding="12dp"
-                android:elevation="3dp"
-                android:background="@drawable/card_white_rounded">
-
-                <ImageView
-                    android:layout_width="58dp"
-                    android:layout_height="58dp"
-                    android:src="@drawable/trevoras_bike"
-                    android:scaleType="centerCrop"
-                    android:contentDescription="Muzika"/>
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginLeft="12dp"
-                    android:orientation="vertical">
-                    <TextView
-                        android:id="@+id/track"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Muzika"
-                        android:textColor="#17232D"
-                        android:textSize="16sp"
-                        android:textStyle="bold"/>
-                    <TextView
-                        android:id="@+id/artist"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="3dp"
-                        android:text="Pasirinkite grojaraštį"
-                        android:textColor="#8794A0"
-                        android:textSize="12sp"/>
-                </LinearLayout>
-
-                <Button
-                    android:id="@+id/prev"
-                    android:layout_width="42dp"
-                    android:layout_height="48dp"
-                    android:text="◀"
-                    android:background="@android:color/transparent"/>
-
-                <Button
-                    android:id="@+id/play"
-                    android:layout_width="58dp"
-                    android:layout_height="58dp"
-                    android:text="▶"
-                    android:textSize="18sp"
-                    android:background="@drawable/play_circle"/>
-
-                <Button
-                    android:id="@+id/next"
-                    android:layout_width="42dp"
-                    android:layout_height="48dp"
-                    android:text="▶"
-                    android:background="@android:color/transparent"/>
-            </LinearLayout>
-
-            <!-- RIDE BUTTONS -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="18dp"
-                android:layout_marginRight="18dp"
-                android:layout_marginTop="12dp"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/startTrip"
-                    android:layout_width="0dp"
-                    android:layout_height="50dp"
-                    android:layout_weight="1"
-                    android:text="PRADĖTI VAŽIAVIMĄ"
-                    android:textColor="#FFFFFF"
-                    android:textStyle="bold"
-                    android:background="@drawable/button_blue"/>
-
-                <Space
-                    android:layout_width="8dp"
-                    android:layout_height="1dp"/>
-
-                <Button
-                    android:id="@+id/resetTrip"
-                    android:layout_width="96dp"
-                    android:layout_height="50dp"
-                    android:text="RESET"
-                    android:background="@drawable/chip_white"/>
-            </LinearLayout>
-
-            <!-- TFT / SYSTEM (kept but clean) -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_margin="18dp"
-                android:orientation="vertical"
-                android:padding="14dp"
-                android:background="@drawable/card_white_rounded">
-
-                <TextView
-                    android:id="@+id/bikeInfo"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="RPM —   Pavara —   Temp. —   Kuras —   ABS —"
-                    android:textColor="#6F7D88"
-                    android:textSize="12sp"/>
-
-                <TextView
-                    android:id="@+id/castStatus"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="TFT: pasiruošęs"
-                    android:textColor="#25323C"
-                    android:textStyle="bold"/>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="horizontal">
-
-                    <EditText
-                        android:id="@+id/castIp"
-                        android:layout_width="0dp"
-                        android:layout_height="46dp"
-                        android:layout_weight="2"
-                        android:hint="TFT IP"
-                        android:singleLine="true"
-                        android:text="10.73.119.253"
-                        android:paddingLeft="12dp"
-                        android:background="@drawable/input_soft"/>
-
-                    <Space android:layout_width="8dp" android:layout_height="1dp"/>
-
-                    <EditText
-                        android:id="@+id/castPort"
-                        android:layout_width="0dp"
-                        android:layout_height="46dp"
-                        android:layout_weight="1"
-                        android:hint="Portas"
-                        android:singleLine="true"
-                        android:inputType="number"
-                        android:text="8888"
-                        android:paddingLeft="12dp"
-                        android:background="@drawable/input_soft"/>
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="horizontal">
-
-                    <Button
-                        android:id="@+id/autoDiscover"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_weight="1"
-                        android:text="AUTO TFT"
-                        android:textColor="#FFFFFF"
-                        android:background="@drawable/button_blue"/>
-
-                    <Space android:layout_width="6dp" android:layout_height="1dp"/>
-
-                    <Button
-                        android:id="@+id/testTft"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_weight="1"
-                        android:text="TESTAS"
-                        android:background="@drawable/chip_white"/>
-
-                    <Space android:layout_width="6dp" android:layout_height="1dp"/>
-
-                    <Button
-                        android:id="@+id/deepScan"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_weight="1"
-                        android:text="SKENUOTI"
-                        android:background="@drawable/chip_white"/>
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/discoveryLog"
-                    android:layout_width="match_parent"
-                    android:layout_height="100dp"
-                    android:layout_marginTop="8dp"
-                    android:padding="10dp"
-                    android:text="Diagnostikos žurnalas"
-                    android:textColor="#62717D"
-                    android:textSize="11sp"
-                    android:background="@drawable/input_soft"/>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="horizontal">
-
-                    <Button
-                        android:id="@+id/startCast"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_weight="1"
-                        android:text="START TFT"
-                        android:textColor="#FFFFFF"
-                        android:background="@drawable/button_blue"/>
-
-                    <Space android:layout_width="6dp" android:layout_height="1dp"/>
-
-                    <Button
-                        android:id="@+id/stopCast"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_weight="1"
-                        android:text="STOP"
-                        android:background="@drawable/chip_white"/>
-                </LinearLayout>
-
-                <Button
-                    android:id="@+id/copyDiag"
-                    android:layout_width="match_parent"
-                    android:layout_height="40dp"
-                    android:layout_marginTop="8dp"
-                    android:text="KOPIJUOTI DIAGNOSTIKĄ"
-                    android:background="@drawable/chip_white"/>
-
-                <Button
-                    android:id="@+id/openSpotify"
-                    android:layout_width="1dp"
-                    android:layout_height="1dp"
-                    android:visibility="invisible"
-                    android:text="Spotify"/>
-
-                <Button
-                    android:id="@+id/mediaPermission"
-                    android:layout_width="1dp"
-                    android:layout_height="1dp"
-                    android:visibility="invisible"
-                    android:text="Leidimas"/>
-            </LinearLayout>
-        </LinearLayout>
-    </ScrollView>
-
-    <!-- BOTTOM NAV -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="72dp"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:background="#FFFFFF"
-        android:elevation="8dp">
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="◆\nPradžia"
-            android:textColor="#2196F3"
-            android:textSize="11sp"
-            android:textStyle="bold"/>
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="⌖\nŽemėlapis"
-            android:textColor="#71818E"
-            android:textSize="11sp"/>
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="🏍\nRide"
-            android:textColor="#71818E"
-            android:textSize="11sp"/>
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="♫\nMuzika"
-            android:textColor="#71818E"
-            android:textSize="11sp"/>
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="⚙\nTrevoras"
-            android:textColor="#71818E"
-            android:textSize="11sp"/>
-    </LinearLayout>
-
+<View android:layout_width="1dp" android:layout_height="54dp" android:background="#E1E7EB"/>
+<LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+<ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_time"/>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Laikas" android:textColor="#7A8792" android:textSize="11sp"/>
+<TextView android:id="@+id/time" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="00:00" android:textColor="#17232D" android:textSize="20sp" android:textStyle="bold"/>
 </LinearLayout>
+<View android:layout_width="1dp" android:layout_height="54dp" android:background="#E1E7EB"/>
+<LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+<ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_speed"/>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="MAX greitis" android:textColor="#7A8792" android:textSize="10sp"/>
+<TextView android:id="@+id/maxspeed" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="0 km/h" android:textColor="#17232D" android:textSize="20sp" android:textStyle="bold"/>
+</LinearLayout>
+<View android:layout_width="1dp" android:layout_height="54dp" android:background="#E1E7EB"/>
+<LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+<ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_altitude"/>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Aukštis" android:textColor="#7A8792" android:textSize="11sp"/>
+<TextView android:id="@+id/heading" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="— m" android:textColor="#17232D" android:textSize="20sp" android:textStyle="bold"/>
+</LinearLayout>
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="22dp" android:layout_marginTop="26dp" android:text="Navigacija" android:textColor="#17232D" android:textSize="26sp" android:textStyle="bold"/>
+<!--  NAVIGATION CARD  -->
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="18dp" android:layout_marginRight="18dp" android:layout_marginTop="10dp" android:background="@drawable/card_white_rounded" android:elevation="5dp" android:orientation="vertical" android:padding="10dp">
+<LinearLayout android:layout_width="match_parent" android:layout_height="54dp" android:gravity="center_vertical" android:orientation="horizontal">
+<EditText android:id="@+id/destination" android:layout_width="0dp" android:layout_height="50dp" android:layout_weight="1" android:background="@drawable/input_soft" android:hint="📍 Kur važiuojame?" android:paddingLeft="16dp" android:singleLine="true" android:textColor="#17232D" android:textColorHint="#7D8993" android:textSize="15sp"/>
+<Button android:id="@+id/googleMaps" android:layout_width="112dp" android:layout_height="50dp" android:layout_marginLeft="8dp" android:background="@drawable/button_blue" android:text="MARŠRUTAS" android:textColor="#FFFFFF" android:textSize="11sp" android:textStyle="bold"/>
+</LinearLayout>
+<FrameLayout android:layout_width="match_parent" android:layout_height="360dp" android:layout_marginTop="8dp">
+<WebView android:id="@+id/mapWeb" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#EAF1F4"/>
+<TextView android:layout_width="52dp" android:layout_height="52dp" android:layout_gravity="top|start" android:layout_margin="12dp" android:background="@drawable/chip_white" android:elevation="4dp" android:gravity="center" android:text="▲\nN" android:textColor="#17232D" android:textSize="13sp" android:textStyle="bold"/>
+</FrameLayout>
+<LinearLayout android:layout_width="match_parent" android:layout_height="104dp" android:layout_marginTop="-2dp" android:background="@drawable/chip_white" android:elevation="6dp" android:gravity="center_vertical" android:orientation="horizontal" android:padding="12dp">
+<TextView android:layout_width="54dp" android:layout_height="54dp" android:gravity="center" android:text="↰" android:textColor="#2196F3" android:textSize="40sp" android:textStyle="bold"/>
+<LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1.3" android:gravity="center_vertical" android:orientation="vertical">
+<TextView android:id="@+id/navInstruction" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Pasirinkite kelionės tikslą" android:textColor="#17232D" android:textSize="15sp" android:textStyle="bold"/>
+<TextView android:id="@+id/navNextDistance" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="" android:textColor="#75828D" android:textSize="13sp"/>
+</LinearLayout>
+<LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="0.8" android:gravity="center" android:orientation="vertical">
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Atstumas" android:textColor="#7D8993" android:textSize="10sp"/>
+<TextView android:id="@+id/navDistance" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="—" android:textColor="#17232D" android:textSize="16sp" android:textStyle="bold"/>
+</LinearLayout>
+<LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="0.8" android:gravity="center" android:orientation="vertical">
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ETA" android:textColor="#7D8993" android:textSize="10sp"/>
+<TextView android:id="@+id/navEta" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="—" android:textColor="#17232D" android:textSize="16sp" android:textStyle="bold"/>
+</LinearLayout>
+<LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="0.8" android:gravity="center" android:orientation="vertical">
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Vid. greitis" android:textColor="#7D8993" android:textSize="10sp"/>
+<TextView android:id="@+id/navAvgSpeed" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0 km/h" android:textColor="#17232D" android:textSize="15sp" android:textStyle="bold"/>
+</LinearLayout>
+</LinearLayout>
+<Button android:id="@+id/waze" android:layout_width="match_parent" android:layout_height="46dp" android:layout_marginTop="8dp" android:background="@drawable/chip_white" android:text="ATIDARYTI WAZE" android:textColor="#34424E" android:textStyle="bold"/>
+</LinearLayout>
+<!--  MUSIC  -->
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="22dp" android:layout_marginTop="24dp" android:text="Muzika" android:textColor="#17232D" android:textSize="24sp" android:textStyle="bold"/>
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="18dp" android:layout_marginRight="18dp" android:layout_marginTop="8dp" android:background="@drawable/card_white_rounded" android:orientation="vertical" android:padding="16dp">
+<TextView android:id="@+id/track" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Nieko negroja" android:textColor="#17232D" android:textSize="17sp" android:textStyle="bold"/>
+<TextView android:id="@+id/artist" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="—" android:textColor="#7A8792" android:textSize="13sp"/>
+<LinearLayout android:layout_width="match_parent" android:layout_height="58dp" android:layout_marginTop="8dp" android:gravity="center" android:orientation="horizontal">
+<Button android:id="@+id/prev" android:layout_width="58dp" android:layout_height="52dp" android:background="@android:color/transparent" android:text="◀◀" android:textColor="#17232D"/>
+<Button android:id="@+id/play" android:layout_width="58dp" android:layout_height="58dp" android:background="@drawable/play_circle" android:text="▶" android:textColor="#17232D" android:textSize="20sp"/>
+<Button android:id="@+id/next" android:layout_width="58dp" android:layout_height="52dp" android:background="@android:color/transparent" android:text="▶▶" android:textColor="#17232D"/>
+</LinearLayout>
+<Button android:id="@+id/openSpotify" android:layout_width="match_parent" android:layout_height="46dp" android:layout_marginTop="4dp" android:background="@drawable/chip_white" android:text="ATIDARYTI SPOTIFY" android:textColor="#34424E"/>
+<Button android:id="@+id/mediaPermission" android:layout_width="match_parent" android:layout_height="44dp" android:layout_marginTop="6dp" android:background="@drawable/chip_white" android:text="LEISTI MUZIKOS VALDYMĄ" android:textColor="#6D7A86" android:textSize="11sp"/>
+</LinearLayout>
+<!--  RIDE  -->
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="18dp" android:layout_marginRight="18dp" android:layout_marginTop="14dp" android:orientation="horizontal">
+<Button android:id="@+id/startTrip" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:background="@drawable/button_blue" android:text="PRADĖTI VAŽIAVIMĄ" android:textColor="#FFFFFF" android:textStyle="bold"/>
+<Space android:layout_width="8dp" android:layout_height="1dp"/>
+<Button android:id="@+id/resetTrip" android:layout_width="92dp" android:layout_height="48dp" android:background="@drawable/chip_white" android:text="RESET" android:textColor="#34424E"/>
+</LinearLayout>
+<!--  DIAGNOSTICS kept out of the visual home flow  -->
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="18dp" android:layout_marginRight="18dp" android:layout_marginTop="18dp" android:background="@drawable/card_white_rounded" android:orientation="vertical" android:padding="14dp">
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Trevoras / TFT diagnostika" android:textColor="#17232D" android:textSize="16sp" android:textStyle="bold"/>
+<TextView android:id="@+id/bikeInfo" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="7dp" android:text="RPM — Pavara — Temp. — Kuras — ABS —" android:textColor="#7A8792" android:textSize="11sp"/>
+<TextView android:id="@+id/castStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="TFT: pasiruošęs" android:textColor="#34424E" android:textStyle="bold"/>
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="horizontal">
+<EditText android:id="@+id/castIp" android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:background="@drawable/input_soft" android:hint="TFT IP" android:paddingLeft="10dp" android:singleLine="true" android:textColor="#17232D"/>
+<EditText android:id="@+id/castPort" android:layout_width="82dp" android:layout_height="44dp" android:layout_marginLeft="6dp" android:background="@drawable/input_soft" android:hint="Portas" android:inputType="number" android:paddingLeft="8dp" android:singleLine="true" android:textColor="#17232D"/>
+</LinearLayout>
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="7dp" android:orientation="horizontal">
+<Button android:id="@+id/autoDiscover" android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:background="@drawable/button_blue" android:text="AUTO TFT" android:textColor="#FFFFFF"/>
+<Space android:layout_width="6dp" android:layout_height="1dp"/>
+<Button android:id="@+id/testTft" android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:background="@drawable/chip_white" android:text="TEST" android:textColor="#34424E"/>
+</LinearLayout>
+<Button android:id="@+id/deepScan" android:layout_width="match_parent" android:layout_height="42dp" android:layout_marginTop="6dp" android:background="@drawable/chip_white" android:text="GILI DIAGNOSTIKA" android:textColor="#6D7A86"/>
+<TextView android:id="@+id/discoveryLog" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="7dp" android:text="" android:textColor="#64727E" android:textSize="11sp"/>
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="horizontal">
+<Button android:id="@+id/startCast" android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:background="@drawable/button_blue" android:text="PROJEKCIJA" android:textColor="#FFFFFF"/>
+<Space android:layout_width="6dp" android:layout_height="1dp"/>
+<Button android:id="@+id/stopCast" android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:background="@drawable/chip_white" android:text="STOP" android:textColor="#34424E"/>
+</LinearLayout>
+<TextView android:id="@+id/copyDiag" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone" android:text=""/>
+</LinearLayout>
+<!--  BOTTOM NAV VISUAL  -->
+<LinearLayout android:layout_width="match_parent" android:layout_height="68dp" android:layout_marginTop="18dp" android:background="#FFFFFF" android:elevation="8dp" android:gravity="center" android:orientation="horizontal">
+<TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="⌂\nPradžia" android:textColor="#2196F3" android:textSize="11sp"/>
+<TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="◇\nŽemėlapis" android:textColor="#8493A0" android:textSize="11sp"/>
+<TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="🏍\nKelionės" android:textColor="#8493A0" android:textSize="11sp"/>
+<TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="♫\nMuzika" android:textColor="#8493A0" android:textSize="11sp"/>
+<TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="⚙\nTrevoras" android:textColor="#8493A0" android:textSize="11sp"/>
+</LinearLayout>
+</LinearLayout>
+</ScrollView>
