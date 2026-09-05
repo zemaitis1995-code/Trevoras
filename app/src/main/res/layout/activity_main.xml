@@ -1,5 +1,4 @@
-This XML file does not appear to have any style information associated with it. The document tree is shown below.
-   <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:background="#F3F6F8">
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:background="#F3F6F8">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingBottom="24dp">
 <!--  HERO  -->
 <FrameLayout android:layout_width="match_parent" android:layout_height="520dp">
