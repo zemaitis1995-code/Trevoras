@@ -23,8 +23,7 @@ public class TrevorasWssClient {
     private static final int LOCAL_SESSION_PORT = 9039;
     private static final int TFT_PORT = 9038;
 
-    // Tavo Barton Traverse TFT dabartinis hotspot IP.
-    // Naudojamas tik kaip atsarginis kelias, jei Android nepraleidžia UDP broadcast discovery.
+    // Atsarginis TFT IP, jei Android hotspot nepraleidžia broadcast.
     private static final String KNOWN_TFT_IP = "10.73.119.253";
 
     private static final byte[] START =
@@ -48,6 +47,10 @@ public class TrevorasWssClient {
     private static final ExecutorService executor =
             Executors.newSingleThreadExecutor();
 
+    /*
+     * Tas pats lock naudojamas control ir video paketams,
+     * kad vienu metu nebūtų chaotiškai naudojamas UDP 9039 socketas.
+     */
     private static final Object socketLock = new Object();
 
     private static volatile DatagramSocket sessionSocket;
@@ -60,21 +63,24 @@ public class TrevorasWssClient {
     private static volatile Listener listener;
 
     private static int missedHeartbeats = 0;
+
+
     // Suderinamumas su esamu MainActivity
-public TrevorasWssClient() {
-}
+    public TrevorasWssClient() {
+    }
 
-public TrevorasWssClient(Listener newListener) {
-    listener = newListener;
-}
+    public TrevorasWssClient(Listener newListener) {
+        listener = newListener;
+    }
 
-public void connectAsync() {
-    connect();
-}
+    public void connectAsync() {
+        connect();
+    }
 
-public void stop() {
-    disconnect();
-}
+    public void stop() {
+        disconnect();
+    }
+
 
     public static void setListener(Listener newListener) {
         listener = newListener;
@@ -88,7 +94,13 @@ public void stop() {
         return deviceIpStr;
     }
 
+
+    // =========================================================
+    // PRISIJUNGIMAS
+    // =========================================================
+
     public static void connect() {
+
         if (running) {
             status("TFT ryšys jau paleistas");
             return;
@@ -97,29 +109,62 @@ public void stop() {
         running = true;
 
         executor.execute(() -> {
+
             try {
+
                 status("Ieškomas TFT...");
 
                 String ip = discoverDevice();
 
                 if (ip == null) {
-                    // Samsung/Android hotspot kartais nepraleidžia 255.255.255.255 broadcast
-                    // į prijungtą klientą. TFT IP jau žinome, todėl bandome tiesioginį WSS START.
+
+                    /*
+                     * Kai kurie Android hotspotai nepraleidžia
+                     * 255.255.255.255 broadcast.
+                     *
+                     * Todėl turime atsarginį IP.
+                     */
+
                     ip = KNOWN_TFT_IP;
-                    status("Broadcast nerado. Bandomas TFT tiesiogiai: " + ip);
+
+                    status(
+                            "Broadcast nerado. Bandomas TFT tiesiogiai: "
+                                    + ip
+                    );
                 }
 
                 deviceIpStr = ip;
-                deviceAddress = InetAddress.getByName(ip);
+
+                deviceAddress =
+                        InetAddress.getByName(ip);
 
                 status("TFT rastas: " + ip);
 
                 openSessionSocket();
 
-                boolean startOk = sendAndCheck(START, START_ACK);
+                /*
+                 * Originalus protokolas:
+                 *
+                 * TEL :9039
+                 *  |
+                 *  +---- START ----> TFT :9038
+                 *
+                 * TEL :9039
+                 *  <--- START_ACK --- TFT
+                 */
+
+                boolean startOk =
+                        sendAndCheck(
+                                START,
+                                START_ACK
+                        );
 
                 if (!startOk) {
-                    status("TFT nepatvirtino START");
+
+                    status(
+                            "TFT nepatvirtino START"
+                    );
+
                     closeInternal();
                     return;
                 }
@@ -127,9 +172,13 @@ public void stop() {
                 connected = true;
                 missedHeartbeats = 0;
 
-                status("TFT prijungtas: " + deviceIpStr);
+                status(
+                        "TFT prijungtas: "
+                                + deviceIpStr
+                );
 
                 Listener l = listener;
+
                 if (l != null) {
                     l.onConnected(deviceIpStr);
                 }
@@ -137,23 +186,40 @@ public void stop() {
                 heartbeatLoop();
 
             } catch (Exception e) {
-                status("TFT klaida: " + safeMessage(e));
+
+                status(
+                        "TFT klaida: "
+                                + safeMessage(e)
+                );
+
                 closeInternal();
             }
         });
     }
 
+
+    // =========================================================
+    // ATSIJUNGIMAS
+    // =========================================================
+
     public static void disconnect() {
+
         running = false;
 
         executor.execute(() -> {
+
             try {
+
                 if (sessionSocket != null &&
                         !sessionSocket.isClosed() &&
                         deviceAddress != null) {
 
-                    sendAndCheck(STOP, STOP_ACK);
+                    sendAndCheck(
+                            STOP,
+                            STOP_ACK
+                    );
                 }
+
             } catch (Exception ignored) {
             }
 
@@ -161,70 +227,139 @@ public void stop() {
         });
     }
 
+
+    // =========================================================
+    // TFT DISCOVERY
+    // =========================================================
+
     private static String discoverDevice() {
+
         DatagramSocket discoverySocket = null;
 
         try {
-            discoverySocket = new DatagramSocket(null);
+
+            discoverySocket =
+                    new DatagramSocket(null);
+
             discoverySocket.setReuseAddress(true);
 
+            /*
+             * Originalas klauso:
+             *
+             * 0.0.0.0:9034
+             */
+
             discoverySocket.bind(
-                    new InetSocketAddress("0.0.0.0", DISCOVERY_RECEIVE_PORT)
+                    new InetSocketAddress(
+                            "0.0.0.0",
+                            DISCOVERY_RECEIVE_PORT
+                    )
             );
 
             discoverySocket.setBroadcast(true);
+
             discoverySocket.setSoTimeout(1500);
 
-            byte[] request = "IP_FOUND".getBytes("US-ASCII");
+            byte[] request =
+                    "IP_FOUND".getBytes(
+                            "US-ASCII"
+                    );
 
-            DatagramPacket sendPacket = new DatagramPacket(
-                    request,
-                    request.length,
-                    InetAddress.getByName("255.255.255.255"),
-                    DISCOVERY_SEND_PORT
-            );
+            DatagramPacket sendPacket =
+                    new DatagramPacket(
+                            request,
+                            request.length,
+                            InetAddress.getByName(
+                                    "255.255.255.255"
+                            ),
+                            DISCOVERY_SEND_PORT
+                    );
 
-            for (int attempt = 1; attempt <= 4; attempt++) {
+            for (int attempt = 1;
+                 attempt <= 4;
+                 attempt++) {
 
-                status("TFT paieška " + attempt + "/4");
+                status(
+                        "TFT paieška "
+                                + attempt
+                                + "/4"
+                );
 
-                discoverySocket.send(sendPacket);
+                /*
+                 * IP_FOUND -> UDP 9033
+                 */
 
-                long end = System.currentTimeMillis() + 1500;
+                discoverySocket.send(
+                        sendPacket
+                );
 
-                while (System.currentTimeMillis() < end) {
+                long end =
+                        System.currentTimeMillis()
+                                + 1500;
+
+                while (
+                        System.currentTimeMillis()
+                                < end
+                ) {
+
                     try {
-                        byte[] buffer = new byte[512];
 
-                        DatagramPacket response = new DatagramPacket(
-                                buffer,
-                                buffer.length
+                        byte[] buffer =
+                                new byte[512];
+
+                        DatagramPacket response =
+                                new DatagramPacket(
+                                        buffer,
+                                        buffer.length
+                                );
+
+                        discoverySocket.receive(
+                                response
                         );
 
-                        discoverySocket.receive(response);
+                        String text =
+                                new String(
+                                        response.getData(),
+                                        0,
+                                        response.getLength(),
+                                        "US-ASCII"
+                                ).trim();
 
-                        String text = new String(
-                                response.getData(),
-                                0,
-                                response.getLength(),
-                                "US-ASCII"
-                        ).trim();
+                        /*
+                         * TFT:
+                         *
+                         * IP_FOUND_ACK
+                         */
 
-                        if (text.startsWith("IP_FOUND_ACK")) {
-                            return response.getAddress().getHostAddress();
+                        if (text.startsWith(
+                                "IP_FOUND_ACK"
+                        )) {
+
+                            return response
+                                    .getAddress()
+                                    .getHostAddress();
                         }
 
-                    } catch (SocketTimeoutException timeout) {
+                    } catch (
+                            SocketTimeoutException timeout
+                    ) {
+
                         break;
                     }
                 }
             }
 
         } catch (Exception e) {
-            status("TFT paieškos klaida: " + safeMessage(e));
+
+            status(
+                    "TFT paieškos klaida: "
+                            + safeMessage(e)
+            );
 
         } finally {
+
             if (discoverySocket != null) {
+
                 try {
                     discoverySocket.close();
                 } catch (Exception ignored) {
@@ -235,136 +370,256 @@ public void stop() {
         return null;
     }
 
-    private static void openSessionSocket() throws Exception {
+
+    // =========================================================
+    // UDP 9039 SESIJA
+    // =========================================================
+
+    private static void openSessionSocket()
+            throws Exception {
+
         synchronized (socketLock) {
 
             if (sessionSocket != null) {
+
                 try {
                     sessionSocket.close();
                 } catch (Exception ignored) {
                 }
             }
 
-            sessionSocket = new DatagramSocket(null);
+            sessionSocket =
+                    new DatagramSocket(null);
+
             sessionSocket.setReuseAddress(true);
 
+            /*
+             * LABAI SVARBU:
+             *
+             * originali programa lokaliai bindina 9039.
+             */
+
             sessionSocket.bind(
-                    new InetSocketAddress("0.0.0.0", LOCAL_SESSION_PORT)
+                    new InetSocketAddress(
+                            "0.0.0.0",
+                            LOCAL_SESSION_PORT
+                    )
             );
 
-            sessionSocket.setSendBufferSize(1024 * 1024);
-            sessionSocket.setReceiveBufferSize(1024 * 1024);
+            /*
+             * Originale send buffer = 1 MiB.
+             */
+
+            sessionSocket.setSendBufferSize(
+                    1024 * 1024
+            );
+
+            sessionSocket.setReceiveBufferSize(
+                    1024 * 1024
+            );
+
             sessionSocket.setSoTimeout(1500);
         }
     }
+
+
+    // =========================================================
+    // CONTROL KOMANDOS
+    // =========================================================
 
     private static boolean sendAndCheck(
             byte[] command,
             byte[] expectedReply
     ) {
+
         synchronized (socketLock) {
+
             try {
+
                 if (sessionSocket == null ||
                         sessionSocket.isClosed() ||
                         deviceAddress == null) {
+
                     return false;
                 }
 
-                DatagramPacket sendPacket = new DatagramPacket(
-                        command,
-                        command.length,
-                        deviceAddress,
-                        TFT_PORT
+                DatagramPacket sendPacket =
+                        new DatagramPacket(
+                                command,
+                                command.length,
+                                deviceAddress,
+                                TFT_PORT
+                        );
+
+                sessionSocket.send(
+                        sendPacket
                 );
 
-                sessionSocket.send(sendPacket);
-
-                byte[] buffer = new byte[512];
+                byte[] buffer =
+                        new byte[512];
 
                 DatagramPacket receivePacket =
-                        new DatagramPacket(buffer, buffer.length);
+                        new DatagramPacket(
+                                buffer,
+                                buffer.length
+                        );
 
-                sessionSocket.receive(receivePacket);
-
-                byte[] actual = Arrays.copyOf(
-                        receivePacket.getData(),
-                        receivePacket.getLength()
+                sessionSocket.receive(
+                        receivePacket
                 );
 
-                return Arrays.equals(actual, expectedReply);
+                byte[] actual =
+                        Arrays.copyOf(
+                                receivePacket.getData(),
+                                receivePacket.getLength()
+                        );
 
-            } catch (SocketTimeoutException timeout) {
+                return Arrays.equals(
+                        actual,
+                        expectedReply
+                );
+
+            } catch (
+                    SocketTimeoutException timeout
+            ) {
+
                 return false;
 
             } catch (Exception e) {
-                status("UDP klaida: " + safeMessage(e));
+
+                status(
+                        "UDP klaida: "
+                                + safeMessage(e)
+                );
+
                 return false;
             }
         }
     }
+
+
+    // =========================================================
+    // HEARTBEAT
+    // =========================================================
 
     private static void heartbeatLoop() {
 
         while (running && connected) {
 
             try {
+
                 Thread.sleep(2000);
 
-                if (!running || !connected) {
+                if (!running ||
+                        !connected) {
+
                     break;
                 }
 
-                // Heartbeat siunčiame NEBLOKUODAMI video srauto.
-                // Ankstesnė versija laikė socketLock iki 1500 ms laukdama ACK;
-                // tuo metu CastService negalėjo siųsti nė vieno H.264 paketo.
-                sendHeartbeatNoWait();
+                /*
+                 * v1.2.8:
+                 *
+                 * HEART_BEAT
+                 *     ->
+                 * HEART_BEAT_ACK
+                 *
+                 * naudojamas tas pats UDP 9039 socketas.
+                 */
 
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                boolean heartbeatOk =
+                        sendAndCheck(
+                                HEARTBEAT,
+                                HEARTBEAT_ACK
+                        );
+
+                if (!heartbeatOk) {
+
+                    missedHeartbeats++;
+
+                    /*
+                     * Diagnostikos metu specialiai
+                     * NENUTRAUKIAME projekcijos.
+                     *
+                     * Taip juodo ekrano diagnostika
+                     * nenutrūksta vien dėl heartbeat.
+                     */
+
+                    status(
+                            "TFT prijungtas, heartbeat neatsakė ("
+                                    + missedHeartbeats
+                                    + ")"
+                    );
+
+                } else {
+
+                    if (missedHeartbeats > 0) {
+
+                        missedHeartbeats = 0;
+
+                        status(
+                                "TFT heartbeat vėl veikia"
+                        );
+                    }
+                }
+
+            } catch (
+                    InterruptedException e
+            ) {
+
+                Thread.currentThread()
+                        .interrupt();
+
                 break;
 
             } catch (Exception e) {
-                status("Heartbeat klaida: " + safeMessage(e));
+
+                status(
+                        "Heartbeat klaida: "
+                                + safeMessage(e)
+                );
             }
         }
     }
+
+
+    // =========================================================
+    // VIDEO
+    // =========================================================
 
     /**
-     * SVARBIAUSIAS METODAS CASTSERVICE.
+     * CastService čia perduoda JAU SUFORMUOTĄ
+     * H.264 UDP fragmentą.
      *
-     * H.264/video paketas siunčiamas per TĄ PATĮ aktyvų
-     * UDP socketą, kuris lokaliai prijungtas prie 9039.
+     * Labai svarbu:
      *
-     * TFT paskirties portas: 9038.
+     * NEKURIAME naujo socketo.
+     *
+     * Naudojame tą patį:
+     *
+     * telefono UDP 9039
+     *        ->
+     * TFT UDP 9038
      */
-    private static void sendHeartbeatNoWait() {
-        synchronized (socketLock) {
-            try {
-                if (!connected || sessionSocket == null || sessionSocket.isClosed() || deviceAddress == null) {
-                    return;
-                }
-                DatagramPacket p = new DatagramPacket(
-                        HEARTBEAT, HEARTBEAT.length, deviceAddress, TFT_PORT
-                );
-                sessionSocket.send(p);
-            } catch (Exception e) {
-                status("Heartbeat siuntimo klaida: " + safeMessage(e));
-            }
-        }
-    }
+    public static boolean
+    sendVideoPacketViaActiveSession(
+            byte[] packet
+    ) {
 
-    public static boolean sendVideoPacketViaActiveSession(byte[] packet) {
+        if (packet == null ||
+                packet.length == 0) {
 
-        if (packet == null || packet.length == 0) {
             return false;
         }
 
         synchronized (socketLock) {
+
             try {
+
                 if (!connected ||
                         sessionSocket == null ||
                         sessionSocket.isClosed() ||
                         deviceAddress == null) {
+
                     return false;
                 }
 
@@ -376,24 +631,42 @@ public void stop() {
                                 TFT_PORT
                         );
 
-                sessionSocket.send(datagramPacket);
+                sessionSocket.send(
+                        datagramPacket
+                );
 
                 return true;
 
             } catch (Exception e) {
-                status("Video UDP klaida: " + safeMessage(e));
+
+                status(
+                        "Video UDP klaida: "
+                                + safeMessage(e)
+                );
+
                 return false;
             }
         }
     }
 
-    /**
-     * Paliekamas ir trumpesnis alias, jeigu kuri nors
-     * ankstesnė TREVORAS klasė naudoja šį pavadinimą.
+
+    /*
+     * Alias senesnėms Trevoras klasėms.
      */
-    public static boolean sendVideoPacket(byte[] packet) {
-        return sendVideoPacketViaActiveSession(packet);
+    public static boolean sendVideoPacket(
+            byte[] packet
+    ) {
+
+        return
+                sendVideoPacketViaActiveSession(
+                        packet
+                );
     }
+
+
+    // =========================================================
+    // UŽDARYMAS
+    // =========================================================
 
     private static void closeInternal() {
 
@@ -404,6 +677,7 @@ public void stop() {
         synchronized (socketLock) {
 
             if (sessionSocket != null) {
+
                 try {
                     sessionSocket.close();
                 } catch (Exception ignored) {
@@ -419,7 +693,9 @@ public void stop() {
         disconnected();
     }
 
+
     private static void disconnected() {
+
         Listener l = listener;
 
         if (l != null) {
@@ -427,7 +703,11 @@ public void stop() {
         }
     }
 
-    private static void status(String text) {
+
+    private static void status(
+            String text
+    ) {
+
         Listener l = listener;
 
         if (l != null) {
@@ -435,16 +715,24 @@ public void stop() {
         }
     }
 
-    private static String safeMessage(Throwable throwable) {
+
+    private static String safeMessage(
+            Throwable throwable
+    ) {
 
         if (throwable == null) {
             return "nežinoma";
         }
 
-        String message = throwable.getMessage();
+        String message =
+                throwable.getMessage();
 
-        if (message == null || message.trim().isEmpty()) {
-            return throwable.getClass().getSimpleName();
+        if (message == null ||
+                message.trim().isEmpty()) {
+
+            return throwable
+                    .getClass()
+                    .getSimpleName();
         }
 
         return message;
