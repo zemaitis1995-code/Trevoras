@@ -3,6 +3,7 @@ package lt.trevoras.multimedia;
 import android.Manifest;
 import android.app.*;
 import android.content.*;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.*;
@@ -869,7 +870,7 @@ public class MainActivity extends Activity implements LocationListener {
         new AlertDialog.Builder(this)
                 .setTitle("Kuro lygis")
                 .setMessage("Kol kas TFT kuro duomenų dar neskaitome automatiškai. Įvesk apytikslį kuro lygį procentais.")
-.setView(input)
+                .setView(input, pad, 0, pad, 0)
                 .setPositiveButton("IŠSAUGOTI", (dialog, which) -> {
                     try {
                         int value = Integer.parseInt(input.getText().toString().trim());
@@ -1248,13 +1249,17 @@ public class MainActivity extends Activity implements LocationListener {
 
     void requestCast() {
 
-        Intent capture =
-                mpm.createScreenCaptureIntent();
+        // TFT yra 1280x768 (landscape). Prieš MediaProjection leidimo langą
+        // priverčiame TREVORAS Activity persijungti į landscape, kad Android
+        // sukurtų gulsčią projekcijos geometriją, o ne bandytų portrait ekraną
+        // tiesiog sugrūsti į 1280x768 encoderio Surface.
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 
-        startActivityForResult(
-                capture,
-                REQ_CAST
-        );
+        // Duodame Android trumpą momentą užbaigti orientacijos pakeitimą.
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            Intent capture = mpm.createScreenCaptureIntent();
+            startActivityForResult(capture, REQ_CAST);
+        }, 450);
     }
 
     @Override
