@@ -870,7 +870,7 @@ public class MainActivity extends Activity implements LocationListener {
         new AlertDialog.Builder(this)
                 .setTitle("Kuro lygis")
                 .setMessage("Kol kas TFT kuro duomenų dar neskaitome automatiškai. Įvesk apytikslį kuro lygį procentais.")
-                .setView(input, pad, 0, pad, 0)
+                .setView(input)
                 .setPositiveButton("IŠSAUGOTI", (dialog, which) -> {
                     try {
                         int value = Integer.parseInt(input.getText().toString().trim());
