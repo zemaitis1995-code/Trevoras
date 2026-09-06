@@ -18,7 +18,6 @@ public class CastService extends Service {
     Thread worker;
     volatile boolean running;
 
-    DatagramSocket udpSocket;
     InetAddress tftAddress;
 
     static final String CH = "trevoras_cast";
@@ -155,11 +154,9 @@ public class CastService extends Service {
 
         tftAddress = InetAddress.getByName(host);
 
-        // Originali WSS/video kryptis: telefonas -> TFT UDP 9038.
-        // Nerišame prie 9039, nes tą portą jau gali naudoti
-        // TrevorasWssClient valdymo sesija.
-        udpSocket = new DatagramSocket();
-        udpSocket.setSendBufferSize(1024 * 1024);
+        // SVARBU: originali programėlė valdymą IR video siunčia per tą pačią
+        // WSS UDP sesiją, kurios telefono pusės portas yra 9039.
+        // Todėl čia nekuriame atskiro DatagramSocket su atsitiktiniu source portu.
 
         running = true;
 
@@ -291,15 +288,8 @@ public class CastService extends Service {
                     chunkLength
             );
 
-            DatagramPacket dp =
-                    new DatagramPacket(
-                            packet,
-                            packet.length,
-                            tftAddress,
-                            port
-                    );
-
-            udpSocket.send(dp);
+            // Siunčiame per TrevorasWssClient jau atidarytą local UDP 9039 socketą.
+            TrevorasWssClient.sendVideoPacketViaActiveSession(packet);
 
             offset += chunkLength;
             fragmentIndex++;
@@ -314,15 +304,6 @@ public class CastService extends Service {
             worker.interrupt();
             worker = null;
         }
-
-        try {
-            if (udpSocket != null) {
-                udpSocket.close();
-            }
-        } catch (Exception ignored) {
-        }
-
-        udpSocket = null;
 
         try {
             if (codec != null) {
