@@ -299,23 +299,15 @@ public class TrevorasWssClient {
                 );
 
                 if (ok) {
-                    if (missed > 0) {
-                        status("TFT ryšys aktyvus — heartbeat vėl atsako.");
-                    }
                     missed = 0;
-
                 } else {
                     missed++;
+                    status("TFT heartbeat neatsako (" + missed + "/2)");
 
-                    // DIAGNOSTINIS REŽIMAS:
-                    // START_ACK jau patvirtino, kad TFT priėmė WSS sesiją.
-                    // Vien heartbeat timeout nebelaikome tikru atsijungimu,
-                    // nes projekcijos / vaizdo protokolą dar atkuriame.
-                    status("TFT prijungtas, heartbeat neatsakė (" + missed + ").");
-
-                    // Neatjungiame ir neuždarome socket'o.
-                    // Skaitiklį apribojame tik tam, kad statusas neaugtų be galo.
-                    if (missed > 99) missed = 99;
+                    if (missed >= 2) {
+                        status("TFT ryšys nutrūko.");
+                        break;
+                    }
                 }
 
             } catch (InterruptedException e) {
@@ -323,15 +315,13 @@ public class TrevorasWssClient {
 
             } catch (Exception e) {
                 missed++;
-                status("TFT prijungtas, heartbeat klaida (" + missed + "): " +
-                        (e.getMessage() == null ? "be atsako" : e.getMessage()));
 
-                if (missed > 99) missed = 99;
+                if (missed >= 2) {
+                    break;
+                }
             }
         }
 
-        // Čia patenkame tik kai vartotojas sustabdo klientą
-        // arba sesija nutraukiama kitu aiškiu būdu.
         disconnectState();
         closeSockets();
     }
