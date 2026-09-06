@@ -23,6 +23,10 @@ public class TrevorasWssClient {
     private static final int LOCAL_SESSION_PORT = 9039;
     private static final int TFT_PORT = 9038;
 
+    // Tavo Barton Traverse TFT dabartinis hotspot IP.
+    // Naudojamas tik kaip atsarginis kelias, jei Android nepraleidžia UDP broadcast discovery.
+    private static final String KNOWN_TFT_IP = "10.73.119.253";
+
     private static final byte[] START =
             new byte[]{0x5A, 0x01, 0x01, 0x0D};
 
@@ -99,10 +103,10 @@ public void stop() {
                 String ip = discoverDevice();
 
                 if (ip == null) {
-                    status("TFT nerastas");
-                    running = false;
-                    disconnected();
-                    return;
+                    // Samsung/Android hotspot kartais nepraleidžia 255.255.255.255 broadcast
+                    // į prijungtą klientą. TFT IP jau žinome, todėl bandome tiesioginį WSS START.
+                    ip = KNOWN_TFT_IP;
+                    status("Broadcast nerado. Bandomas TFT tiesiogiai: " + ip);
                 }
 
                 deviceIpStr = ip;
@@ -310,36 +314,10 @@ public void stop() {
                     break;
                 }
 
-                boolean heartbeatOk =
-                        sendAndCheck(HEARTBEAT, HEARTBEAT_ACK);
-
-                if (heartbeatOk) {
-
-                    if (missedHeartbeats > 0) {
-                        status("TFT ryšys atkurtas");
-                    }
-
-                    missedHeartbeats = 0;
-
-                } else {
-
-                    missedHeartbeats++;
-
-                    /*
-                     * DIAG režimas:
-                     *
-                     * SmartRide logikoje heartbeat praradimas gali būti
-                     * laikomas ryšio problema, tačiau projekcijos testavimo
-                     * metu socketo neuždarome.
-                     *
-                     * Taip H.264 siuntimas nenutraukiamas vien dėl to,
-                     * kad TFT neatsakė į heartbeat.
-                     */
-                    status(
-                            "TFT prijungtas, heartbeat neatsakė (" +
-                                    missedHeartbeats + ")"
-                    );
-                }
+                // Heartbeat siunčiame NEBLOKUODAMI video srauto.
+                // Ankstesnė versija laikė socketLock iki 1500 ms laukdama ACK;
+                // tuo metu CastService negalėjo siųsti nė vieno H.264 paketo.
+                sendHeartbeatNoWait();
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -359,6 +337,22 @@ public void stop() {
      *
      * TFT paskirties portas: 9038.
      */
+    private static void sendHeartbeatNoWait() {
+        synchronized (socketLock) {
+            try {
+                if (!connected || sessionSocket == null || sessionSocket.isClosed() || deviceAddress == null) {
+                    return;
+                }
+                DatagramPacket p = new DatagramPacket(
+                        HEARTBEAT, HEARTBEAT.length, deviceAddress, TFT_PORT
+                );
+                sessionSocket.send(p);
+            } catch (Exception e) {
+                status("Heartbeat siuntimo klaida: " + safeMessage(e));
+            }
+        }
+    }
+
     public static boolean sendVideoPacketViaActiveSession(byte[] packet) {
 
         if (packet == null || packet.length == 0) {
