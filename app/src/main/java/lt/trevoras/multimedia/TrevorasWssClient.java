@@ -2,36 +2,13 @@ package lt.trevoras.multimedia;
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
-import java.net.Inet4Address;
 import java.net.InetAddress;
-import java.net.InterfaceAddress;
-import java.net.NetworkInterface;
+import java.net.InetSocketAddress;
 import java.net.SocketTimeoutException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Enumeration;
-import java.util.List;
+import java.util.Arrays;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-/**
- * TREVORAS TFT/WSS klientas atkurtas pagal originalios
- * com.deepwei.electricbicycle / Duowei programėlės ryšio seką.
- *
- * Discovery:
- *   local UDP 9034 -> broadcast UDP 9033: "IP_FOUND"
- *   TFT -> local UDP 9034: "IP_FOUND_ACK..."
- *
- * Control/video socket:
- *   phone binds local UDP 9039
- *   packets are sent to TFT UDP 9038
- *
- * Control frames:
- *   START      5A 01 01 0D
- *   START_ACK  5F 01 01 0D
- *   STOP       5A 02 01 0D
- *   STOP_ACK   5F 02 01 0D
- *   HEARTBEAT  5A 03 01 0D
- *   HB_ACK     5F 03 01 0D
- */
 public class TrevorasWssClient {
 
     public interface Listener {
@@ -40,180 +17,198 @@ public class TrevorasWssClient {
         void onDisconnected();
     }
 
-    private static final int DISCOVERY_TARGET_PORT = 9033;
-    private static final int DISCOVERY_LOCAL_PORT = 9034;
-    private static final int DEVICE_PORT = 9038;
-    private static final int LOCAL_STREAM_PORT = 9039;
+    private static final int DISCOVERY_SEND_PORT = 9033;
+    private static final int DISCOVERY_RECEIVE_PORT = 9034;
 
-    private static final byte[] IP_FOUND =
-            "IP_FOUND".getBytes();
+    private static final int LOCAL_SESSION_PORT = 9039;
+    private static final int TFT_PORT = 9038;
 
-    private static final byte[] WSS_START =
+    private static final byte[] START =
             new byte[]{0x5A, 0x01, 0x01, 0x0D};
 
-    private static final byte[] WSS_START_ACK =
+    private static final byte[] START_ACK =
             new byte[]{0x5F, 0x01, 0x01, 0x0D};
 
-    private static final byte[] WSS_STOP =
+    private static final byte[] STOP =
             new byte[]{0x5A, 0x02, 0x01, 0x0D};
 
-    private static final byte[] WSS_STOP_ACK =
+    private static final byte[] STOP_ACK =
             new byte[]{0x5F, 0x02, 0x01, 0x0D};
 
-    private static final byte[] WSS_HEARTBEAT =
+    private static final byte[] HEARTBEAT =
             new byte[]{0x5A, 0x03, 0x01, 0x0D};
 
-    private static final byte[] WSS_HEARTBEAT_ACK =
+    private static final byte[] HEARTBEAT_ACK =
             new byte[]{0x5F, 0x03, 0x01, 0x0D};
 
-    private final Listener listener;
+    private static final ExecutorService executor =
+            Executors.newSingleThreadExecutor();
 
-    private volatile boolean running = false;
-    private volatile boolean connected = false;
+    private static final Object socketLock = new Object();
 
-    private String deviceIp = "";
+    private static volatile DatagramSocket sessionSocket;
+    private static volatile InetAddress deviceAddress;
+    private static volatile String deviceIpStr;
 
-    private DatagramSocket discoverySocket;
-    private DatagramSocket streamSocket;
+    private static volatile boolean connected = false;
+    private static volatile boolean running = false;
 
-    private Thread worker;
+    private static volatile Listener listener;
 
-    public TrevorasWssClient(Listener listener) {
-        this.listener = listener;
+    private static int missedHeartbeats = 0;
+
+    public static void setListener(Listener newListener) {
+        listener = newListener;
     }
 
-    public boolean isConnected() {
+    public static boolean isConnected() {
         return connected;
     }
 
-    public String getDeviceIp() {
-        return deviceIp;
+    public static String getDeviceIp() {
+        return deviceIpStr;
     }
 
-    public int getDevicePort() {
-        return DEVICE_PORT;
-    }
-
-    public DatagramSocket getStreamSocket() {
-        return streamSocket;
-    }
-
-    public void connectAsync() {
-        stop();
+    public static void connect() {
+        if (running) {
+            status("TFT ryšys jau paleistas");
+            return;
+        }
 
         running = true;
 
-        worker = new Thread(() -> {
+        executor.execute(() -> {
             try {
-                status("Ieškoma Trevoras TFT...");
+                status("Ieškomas TFT...");
 
                 String ip = discoverDevice();
 
-                if (!running) return;
-
-                if (ip == null || ip.isEmpty()) {
-                    status("TFT nerastas.");
-                    disconnectState();
+                if (ip == null) {
+                    status("TFT nerastas");
+                    running = false;
+                    disconnected();
                     return;
                 }
 
-                deviceIp = ip;
-                status("TFT rastas: " + deviceIp);
+                deviceIpStr = ip;
+                deviceAddress = InetAddress.getByName(ip);
 
-                prepareStreamSocket();
+                status("TFT rastas: " + ip);
 
-                status("Siunčiama projekcijos START užklausa...");
+                openSessionSocket();
 
-                boolean startOk = sendAndCheck(
-                        WSS_START,
-                        WSS_START_ACK,
-                        1500
-                );
+                boolean startOk = sendAndCheck(START, START_ACK);
 
                 if (!startOk) {
-                    status("TFT rastas, bet START_ACK negautas.");
-                    disconnectState();
-                    closeSockets();
+                    status("TFT nepatvirtino START");
+                    closeInternal();
                     return;
                 }
 
                 connected = true;
-                status("TFT prijungtas: " + deviceIp + ":" + DEVICE_PORT);
+                missedHeartbeats = 0;
 
-                if (listener != null) {
-                    listener.onConnected(deviceIp);
+                status("TFT prijungtas: " + deviceIpStr);
+
+                Listener l = listener;
+                if (l != null) {
+                    l.onConnected(deviceIpStr);
                 }
 
                 heartbeatLoop();
 
             } catch (Exception e) {
-                status("TFT ryšio klaida: " + e.getMessage());
-                disconnectState();
-                closeSockets();
+                status("TFT klaida: " + safeMessage(e));
+                closeInternal();
             }
-        }, "Trevoras-WSS");
-
-        worker.start();
+        });
     }
 
-    private String discoverDevice() throws Exception {
+    public static void disconnect() {
+        running = false;
 
-        discoverySocket = new DatagramSocket(
-                DISCOVERY_LOCAL_PORT,
-                InetAddress.getByName("0.0.0.0")
-        );
+        executor.execute(() -> {
+            try {
+                if (sessionSocket != null &&
+                        !sessionSocket.isClosed() &&
+                        deviceAddress != null) {
 
-        discoverySocket.setBroadcast(true);
-        discoverySocket.setSoTimeout(2000);
+                    sendAndCheck(STOP, STOP_ACK);
+                }
+            } catch (Exception ignored) {
+            }
 
-        List<InetAddress> broadcasts = getBroadcastAddresses();
+            closeInternal();
+        });
+    }
 
-        if (broadcasts.isEmpty()) {
-            broadcasts.add(InetAddress.getByName("255.255.255.255"));
-        }
+    private static String discoverDevice() {
+        DatagramSocket discoverySocket = null;
 
-        for (InetAddress broadcast : broadcasts) {
+        try {
+            discoverySocket = new DatagramSocket(null);
+            discoverySocket.setReuseAddress(true);
 
-            if (!running) return null;
-
-            status("TFT paieška: " + broadcast.getHostAddress());
-
-            DatagramPacket request = new DatagramPacket(
-                    IP_FOUND,
-                    IP_FOUND.length,
-                    broadcast,
-                    DISCOVERY_TARGET_PORT
+            discoverySocket.bind(
+                    new InetSocketAddress("0.0.0.0", DISCOVERY_RECEIVE_PORT)
             );
 
-            discoverySocket.send(request);
+            discoverySocket.setBroadcast(true);
+            discoverySocket.setSoTimeout(1500);
 
-            // Originali programėlė bando kelis kartus.
-            for (int attempt = 0; attempt < 3; attempt++) {
+            byte[] request = "IP_FOUND".getBytes("US-ASCII");
 
+            DatagramPacket sendPacket = new DatagramPacket(
+                    request,
+                    request.length,
+                    InetAddress.getByName("255.255.255.255"),
+                    DISCOVERY_SEND_PORT
+            );
+
+            for (int attempt = 1; attempt <= 4; attempt++) {
+
+                status("TFT paieška " + attempt + "/4");
+
+                discoverySocket.send(sendPacket);
+
+                long end = System.currentTimeMillis() + 1500;
+
+                while (System.currentTimeMillis() < end) {
+                    try {
+                        byte[] buffer = new byte[512];
+
+                        DatagramPacket response = new DatagramPacket(
+                                buffer,
+                                buffer.length
+                        );
+
+                        discoverySocket.receive(response);
+
+                        String text = new String(
+                                response.getData(),
+                                0,
+                                response.getLength(),
+                                "US-ASCII"
+                        ).trim();
+
+                        if (text.startsWith("IP_FOUND_ACK")) {
+                            return response.getAddress().getHostAddress();
+                        }
+
+                    } catch (SocketTimeoutException timeout) {
+                        break;
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            status("TFT paieškos klaida: " + safeMessage(e));
+
+        } finally {
+            if (discoverySocket != null) {
                 try {
-                    byte[] buffer = new byte[128];
-
-                    DatagramPacket response =
-                            new DatagramPacket(buffer, buffer.length);
-
-                    discoverySocket.receive(response);
-
-                    String text = new String(
-                            response.getData(),
-                            0,
-                            response.getLength()
-                    ).trim();
-
-                    if (text.startsWith("IP_FOUND_ACK")) {
-                        return response
-                                .getAddress()
-                                .getHostAddress();
-                    }
-
-                } catch (SocketTimeoutException ignored) {
-                    if (attempt < 2) {
-                        discoverySocket.send(request);
-                    }
+                    discoverySocket.close();
+                } catch (Exception ignored) {
                 }
             }
         }
@@ -221,247 +216,228 @@ public class TrevorasWssClient {
         return null;
     }
 
-    private void prepareStreamSocket() throws Exception {
+    private static void openSessionSocket() throws Exception {
+        synchronized (socketLock) {
 
-        if (discoverySocket != null) {
+            if (sessionSocket != null) {
+                try {
+                    sessionSocket.close();
+                } catch (Exception ignored) {
+                }
+            }
+
+            sessionSocket = new DatagramSocket(null);
+            sessionSocket.setReuseAddress(true);
+
+            sessionSocket.bind(
+                    new InetSocketAddress("0.0.0.0", LOCAL_SESSION_PORT)
+            );
+
+            sessionSocket.setSendBufferSize(1024 * 1024);
+            sessionSocket.setReceiveBufferSize(1024 * 1024);
+            sessionSocket.setSoTimeout(1500);
+        }
+    }
+
+    private static boolean sendAndCheck(
+            byte[] command,
+            byte[] expectedReply
+    ) {
+        synchronized (socketLock) {
             try {
-                discoverySocket.close();
-            } catch (Exception ignored) {}
+                if (sessionSocket == null ||
+                        sessionSocket.isClosed() ||
+                        deviceAddress == null) {
+                    return false;
+                }
 
-            discoverySocket = null;
+                DatagramPacket sendPacket = new DatagramPacket(
+                        command,
+                        command.length,
+                        deviceAddress,
+                        TFT_PORT
+                );
+
+                sessionSocket.send(sendPacket);
+
+                byte[] buffer = new byte[512];
+
+                DatagramPacket receivePacket =
+                        new DatagramPacket(buffer, buffer.length);
+
+                sessionSocket.receive(receivePacket);
+
+                byte[] actual = Arrays.copyOf(
+                        receivePacket.getData(),
+                        receivePacket.getLength()
+                );
+
+                return Arrays.equals(actual, expectedReply);
+
+            } catch (SocketTimeoutException timeout) {
+                return false;
+
+            } catch (Exception e) {
+                status("UDP klaida: " + safeMessage(e));
+                return false;
+            }
         }
-
-        streamSocket = new DatagramSocket(
-                LOCAL_STREAM_PORT,
-                InetAddress.getByName("0.0.0.0")
-        );
-
-        // Originali programėlė naudoja 1 MiB send buffer.
-        streamSocket.setSendBufferSize(1024 * 1024);
     }
 
-    private boolean sendAndCheck(
-            byte[] request,
-            byte[] expectedReply,
-            int timeoutMs
-    ) throws Exception {
-
-        if (streamSocket == null ||
-                streamSocket.isClosed() ||
-                deviceIp == null ||
-                deviceIp.isEmpty()) {
-            return false;
-        }
-
-        DatagramPacket send = new DatagramPacket(
-                request,
-                request.length,
-                InetAddress.getByName(deviceIp),
-                DEVICE_PORT
-        );
-
-        streamSocket.setSoTimeout(timeoutMs);
-        streamSocket.send(send);
-
-        byte[] buffer = new byte[256];
-
-        DatagramPacket reply =
-                new DatagramPacket(buffer, buffer.length);
-
-        try {
-            streamSocket.receive(reply);
-        } catch (SocketTimeoutException e) {
-            return false;
-        }
-
-        return beginsWith(
-                reply.getData(),
-                reply.getLength(),
-                expectedReply
-        );
-    }
-
-    private void heartbeatLoop() {
-
-        int missed = 0;
+    private static void heartbeatLoop() {
 
         while (running && connected) {
 
             try {
                 Thread.sleep(2000);
 
-                if (!running || !connected) break;
+                if (!running || !connected) {
+                    break;
+                }
 
-                boolean ok = sendAndCheck(
-                        WSS_HEARTBEAT,
-                        WSS_HEARTBEAT_ACK,
-                        1500
-                );
+                boolean heartbeatOk =
+                        sendAndCheck(HEARTBEAT, HEARTBEAT_ACK);
 
-                if (ok) {
-                    missed = 0;
-                } else {
-                    missed++;
-                    status("TFT heartbeat neatsako (" + missed + "/2)");
+                if (heartbeatOk) {
 
-                    if (missed >= 2) {
-                        status("TFT ryšys nutrūko.");
-                        break;
+                    if (missedHeartbeats > 0) {
+                        status("TFT ryšys atkurtas");
                     }
+
+                    missedHeartbeats = 0;
+
+                } else {
+
+                    missedHeartbeats++;
+
+                    /*
+                     * DIAG režimas:
+                     *
+                     * SmartRide logikoje heartbeat praradimas gali būti
+                     * laikomas ryšio problema, tačiau projekcijos testavimo
+                     * metu socketo neuždarome.
+                     *
+                     * Taip H.264 siuntimas nenutraukiamas vien dėl to,
+                     * kad TFT neatsakė į heartbeat.
+                     */
+                    status(
+                            "TFT prijungtas, heartbeat neatsakė (" +
+                                    missedHeartbeats + ")"
+                    );
                 }
 
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 break;
 
             } catch (Exception e) {
-                missed++;
-
-                if (missed >= 2) {
-                    break;
-                }
+                status("Heartbeat klaida: " + safeMessage(e));
             }
-        }
-
-        disconnectState();
-        closeSockets();
-    }
-
-    public void stop() {
-
-        running = false;
-
-        if (connected && streamSocket != null && !streamSocket.isClosed()) {
-            try {
-                sendAndCheck(
-                        WSS_STOP,
-                        WSS_STOP_ACK,
-                        700
-                );
-            } catch (Exception ignored) {}
-        }
-
-        connected = false;
-
-        if (worker != null) {
-            worker.interrupt();
-            worker = null;
-        }
-
-        closeSockets();
-
-        if (listener != null) {
-            listener.onDisconnected();
         }
     }
 
     /**
-     * Siunčia jau suformuotą UDP vaizdo paketą į TFT:9038.
-     * Kitame etape čia jungsime MediaCodec H.264 fragmentavimo logiką.
+     * SVARBIAUSIAS METODAS CASTSERVICE.
+     *
+     * H.264/video paketas siunčiamas per TĄ PATĮ aktyvų
+     * UDP socketą, kuris lokaliai prijungtas prie 9039.
+     *
+     * TFT paskirties portas: 9038.
      */
-    public synchronized void sendVideoPacket(byte[] packet) throws Exception {
+    public static boolean sendVideoPacketViaActiveSession(byte[] packet) {
 
-        if (!connected ||
-                streamSocket == null ||
-                streamSocket.isClosed()) {
-            throw new IllegalStateException("TFT neprijungtas");
-        }
-
-        DatagramPacket dp = new DatagramPacket(
-                packet,
-                packet.length,
-                InetAddress.getByName(deviceIp),
-                DEVICE_PORT
-        );
-
-        streamSocket.send(dp);
-    }
-
-    private List<InetAddress> getBroadcastAddresses() {
-
-        List<InetAddress> result = new ArrayList<>();
-
-        try {
-            Enumeration<NetworkInterface> interfaces =
-                    NetworkInterface.getNetworkInterfaces();
-
-            if (interfaces == null) return result;
-
-            for (NetworkInterface ni :
-                    Collections.list(interfaces)) {
-
-                try {
-                    if (!ni.isUp() || ni.isLoopback()) continue;
-                } catch (Exception ignored) {
-                    continue;
-                }
-
-                for (InterfaceAddress ia :
-                        ni.getInterfaceAddresses()) {
-
-                    InetAddress broadcast = ia.getBroadcast();
-
-                    if (broadcast instanceof Inet4Address) {
-                        result.add(broadcast);
-                    }
-                }
-            }
-
-        } catch (Exception ignored) {}
-
-        return result;
-    }
-
-    private boolean beginsWith(
-            byte[] data,
-            int dataLength,
-            byte[] expected
-    ) {
-
-        if (data == null ||
-                expected == null ||
-                dataLength < expected.length) {
+        if (packet == null || packet.length == 0) {
             return false;
         }
 
-        for (int i = 0; i < expected.length; i++) {
-            if (data[i] != expected[i]) return false;
-        }
+        synchronized (socketLock) {
+            try {
+                if (!connected ||
+                        sessionSocket == null ||
+                        sessionSocket.isClosed() ||
+                        deviceAddress == null) {
+                    return false;
+                }
 
-        return true;
+                DatagramPacket datagramPacket =
+                        new DatagramPacket(
+                                packet,
+                                packet.length,
+                                deviceAddress,
+                                TFT_PORT
+                        );
+
+                sessionSocket.send(datagramPacket);
+
+                return true;
+
+            } catch (Exception e) {
+                status("Video UDP klaida: " + safeMessage(e));
+                return false;
+            }
+        }
     }
 
-    private void disconnectState() {
+    /**
+     * Paliekamas ir trumpesnis alias, jeigu kuri nors
+     * ankstesnė TREVORAS klasė naudoja šį pavadinimą.
+     */
+    public static boolean sendVideoPacket(byte[] packet) {
+        return sendVideoPacketViaActiveSession(packet);
+    }
 
-        boolean wasConnected = connected;
+    private static void closeInternal() {
+
         connected = false;
+        running = false;
+        missedHeartbeats = 0;
 
-        if (wasConnected && listener != null) {
-            listener.onDisconnected();
+        synchronized (socketLock) {
+
+            if (sessionSocket != null) {
+                try {
+                    sessionSocket.close();
+                } catch (Exception ignored) {
+                }
+
+                sessionSocket = null;
+            }
+        }
+
+        deviceAddress = null;
+        deviceIpStr = null;
+
+        disconnected();
+    }
+
+    private static void disconnected() {
+        Listener l = listener;
+
+        if (l != null) {
+            l.onDisconnected();
         }
     }
 
-    private void closeSockets() {
+    private static void status(String text) {
+        Listener l = listener;
 
-        if (discoverySocket != null) {
-            try {
-                discoverySocket.close();
-            } catch (Exception ignored) {}
-
-            discoverySocket = null;
-        }
-
-        if (streamSocket != null) {
-            try {
-                streamSocket.close();
-            } catch (Exception ignored) {}
-
-            streamSocket = null;
+        if (l != null) {
+            l.onStatus(text);
         }
     }
 
-    private void status(String text) {
-        if (listener != null) {
-            listener.onStatus(text);
+    private static String safeMessage(Throwable throwable) {
+
+        if (throwable == null) {
+            return "nežinoma";
         }
+
+        String message = throwable.getMessage();
+
+        if (message == null || message.trim().isEmpty()) {
+            return throwable.getClass().getSimpleName();
+        }
+
+        return message;
     }
 }
