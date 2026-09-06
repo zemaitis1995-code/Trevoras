@@ -196,11 +196,16 @@ public class MainActivity extends Activity implements LocationListener {
 
         findViewById(R.id.startCast).setOnClickListener(v -> requestCast());
 
-        findViewById(R.id.stopCast).setOnClickListener(v -> {
-            stopService(new Intent(this, CastService.class));
-            castStatus.setText("Projekcija sustabdyta");
-            setTftDisconnected();
-        });
+       findViewById(R.id.stopCast).setOnClickListener(v -> {
+    stopService(new Intent(this, CastService.class));
+
+    if (TrevorasWssClient.isConnected()) {
+        castStatus.setText("Projekcija sustabdyta • TFT lieka prijungtas");
+    } else {
+        castStatus.setText("Projekcija sustabdyta");
+        setTftDisconnected();
+    }
+});
 
         if (settingsButton != null) {
             settingsButton.setOnClickListener(v -> showSettings());
