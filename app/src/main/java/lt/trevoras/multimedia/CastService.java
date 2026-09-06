@@ -1,1671 +1,338 @@
 package lt.trevoras.multimedia;
 
-import android.Manifest;
 import android.app.*;
 import android.content.*;
-import android.content.pm.ActivityInfo;
-import android.content.pm.PackageManager;
-import android.graphics.Color;
-import android.location.*;
-import android.media.MediaMetadata;
-import android.media.projection.MediaProjectionManager;
-import android.media.session.*;
-import android.net.Uri;
+import android.content.pm.ServiceInfo;
+import android.hardware.display.DisplayManager;
+import android.media.*;
+import android.media.projection.*;
 import android.os.*;
-import android.provider.Settings;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.ProgressBar;
-import android.widget.TextView;
-import android.widget.Toast;
+import android.view.Surface;
 
-import org.json.JSONObject;
-import org.json.JSONArray;
-
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.net.*;
-import java.text.SimpleDateFormat;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.nio.ByteBuffer;
 
-public class MainActivity extends Activity implements LocationListener {
+public class CastService extends Service {
+    MediaProjection projection;
+    MediaCodec codec;
+    Thread worker;
+    volatile boolean running;
 
-    TextView speed, trip, maxspeed, time, heading, track, artist;
-    TextView castStatus, subtitle, discoveryLog;
-    TextView heroDate, heroClock, weatherTemp, weatherCity, weatherDesc;
-    TextView tftBadgeText, tftDot, settingsButton;
-    TextView navInstruction, navNextDistance, navDistance, navEta, navAvgSpeed;
-    TextView serviceRemaining, serviceNext, fuelPercent, fuelInfo;
-    Button serviceDone;
-    ProgressBar fuelProgress;
+    InetAddress tftAddress;
 
-    WebView mapWeb;
-    EditText destination, castIp, castPort;
+    static final String CH = "trevoras_cast";
 
-    SharedPreferences prefs;
-    double bikeOdometerKm = 0;
-    double serviceDueKm = -1;
-    int serviceIntervalKm = 1000;
-    long serviceDueDateMs = 0;
-    int fuelLevel = -1;
+    // Originalios programėlės parametrai
+    static final int WIDTH = 1280;
+    static final int HEIGHT = 768;
+    static final int FPS = 15;
+    static final int IFRAME_INTERVAL = 1;
 
-    LocationManager lm;
-    Location lastLocation;
-
-    double tripKm = 0;
-    double maxKmh = 0;
-    boolean tripRunning = false;
-    long tripStart = 0;
-    long accumulatedTripSeconds = 0;
-
-    Handler handler = new Handler(Looper.getMainLooper());
-    MediaProjectionManager mpm;
-
-    static final int REQ_CAST = 700;
-    static final int REQ_LOC = 701;
-
-    long lastWeatherUpdate = 0;
-    boolean tftVerifiedConnected = false;
-    TrevorasWssClient wssClient;
-    boolean mapReady = false;
+    // Originaliame protokole vieno H.264 fragmento duomenų dalis.
+    static final int MAX_CHUNK = 65500;
 
     @Override
-    public void onCreate(Bundle b) {
-        super.onCreate(b);
-        setContentView(R.layout.activity_main);
+    public void onCreate() {
+        super.onCreate();
 
-        speed = findViewById(R.id.speed);
-        trip = findViewById(R.id.trip);
-        maxspeed = findViewById(R.id.maxspeed);
-        time = findViewById(R.id.time);
-        heading = findViewById(R.id.heading);
-        track = findViewById(R.id.track);
-        artist = findViewById(R.id.artist);
-        castStatus = findViewById(R.id.castStatus);
-        subtitle = findViewById(R.id.subtitle);
-        discoveryLog = findViewById(R.id.discoveryLog);
-
-        destination = findViewById(R.id.destination);
-        castIp = findViewById(R.id.castIp);
-        castPort = findViewById(R.id.castPort);
-
-        heroDate = findViewById(R.id.heroDate);
-        heroClock = findViewById(R.id.heroClock);
-        weatherTemp = findViewById(R.id.weatherTemp);
-        weatherCity = findViewById(R.id.weatherCity);
-        weatherDesc = findViewById(R.id.weatherDesc);
-
-        tftBadgeText = findViewById(R.id.tftBadgeText);
-        tftDot = findViewById(R.id.tftDot);
-        settingsButton = findViewById(R.id.settingsButton);
-
-        navInstruction = findViewById(R.id.navInstruction);
-        navNextDistance = findViewById(R.id.navNextDistance);
-        navDistance = findViewById(R.id.navDistance);
-        navEta = findViewById(R.id.navEta);
-        navAvgSpeed = findViewById(R.id.navAvgSpeed);
-
-        serviceRemaining = findViewById(R.id.serviceRemaining);
-        serviceNext = findViewById(R.id.serviceNext);
-        serviceDone = findViewById(R.id.serviceDone);
-        fuelPercent = findViewById(R.id.fuelPercent);
-        fuelInfo = findViewById(R.id.fuelInfo);
-        fuelProgress = findViewById(R.id.fuelProgress);
-
-        prefs = getSharedPreferences("trevoras_prefs", MODE_PRIVATE);
-        bikeOdometerKm = prefs.getFloat("bikeOdometerKm", 0f);
-        serviceDueKm = prefs.getFloat("serviceDueKm", -1f);
-        serviceIntervalKm = prefs.getInt("serviceIntervalKm", 1000);
-        serviceDueDateMs = prefs.getLong("serviceDueDateMs", 0L);
-        fuelLevel = prefs.getInt("fuelLevel", -1);
-
-        lm = (LocationManager) getSystemService(LOCATION_SERVICE);
-        mpm = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-
-        setupMap();
-        setTftDisconnected();
-
-        wssClient = new TrevorasWssClient(new TrevorasWssClient.Listener() {
-            @Override
-            public void onStatus(String text) {
-                runOnUiThread(() -> castStatus.setText(text));
-            }
-
-            @Override
-            public void onConnected(String deviceIp) {
-                runOnUiThread(() -> {
-                    castIp.setText(deviceIp);
-                    castPort.setText("9038");
-                    setTftConnected(deviceIp, 9038);
-                });
-            }
-
-            @Override
-            public void onDisconnected() {
-                runOnUiThread(() -> setTftDisconnected());
-            }
-        });
-
-        refreshTrip();
-        updateLiveClock();
-        updateServiceUi();
-        updateFuelUi();
-
-        findViewById(R.id.googleMaps).setOnClickListener(v -> showRouteInApp());
-        findViewById(R.id.waze).setOnClickListener(v -> navigate(true));
-        findViewById(R.id.openSpotify).setOnClickListener(v -> openPackage("com.spotify.music"));
-
-        findViewById(R.id.mediaPermission).setOnClickListener(v ->
-                startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")));
-
-        findViewById(R.id.prev).setOnClickListener(v ->
-                media(MediaController.TransportControls::skipToPrevious));
-
-        findViewById(R.id.play).setOnClickListener(v -> togglePlay());
-
-        findViewById(R.id.next).setOnClickListener(v ->
-                media(MediaController.TransportControls::skipToNext));
-
-        findViewById(R.id.startTrip).setOnClickListener(v -> startTrip());
-        findViewById(R.id.resetTrip).setOnClickListener(v -> resetTrip());
-
-        if (serviceRemaining != null) {
-            serviceRemaining.setOnClickListener(v -> showServiceSetup());
-        }
-
-        if (serviceDone != null) {
-            serviceDone.setOnClickListener(v -> completeService());
-        }
-
-        if (fuelPercent != null) {
-            fuelPercent.setOnClickListener(v -> showFuelSetup());
-        }
-
-        findViewById(R.id.testTft).setOnClickListener(v -> testTft());
-        findViewById(R.id.autoDiscover).setOnClickListener(v -> {
-            setTftDisconnected();
-            castStatus.setText("Ieškoma TFT gamykliniu protokolu...");
-            if (wssClient != null) wssClient.connectAsync();
-        });
-        findViewById(R.id.deepScan).setOnClickListener(v -> deepScan());
-
-        findViewById(R.id.startCast).setOnClickListener(v -> requestCast());
-
-        findViewById(R.id.stopCast).setOnClickListener(v -> {
-            stopService(new Intent(this, CastService.class));
-            castStatus.setText("Projekcija sustabdyta");
-            setTftDisconnected();
-        });
-
-        if (settingsButton != null) {
-            settingsButton.setOnClickListener(v -> showSettings());
-        }
-
-        requestLocation();
-        handler.post(ticker);
-    }
-
-    void setupMap() {
-        mapWeb = findViewById(R.id.mapWeb);
-
-        WebSettings mapSettings = mapWeb.getSettings();
-        mapSettings.setJavaScriptEnabled(true);
-        mapSettings.setDomStorageEnabled(true);
-
-        mapWeb.setWebViewClient(new WebViewClient() {
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                mapReady = true;
-                if (lastLocation != null) updateMap(lastLocation);
-            }
-        });
-
-        String html = "<!doctype html><html><head>" +
-                "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no'>" +
-                "<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>" +
-                "<style>html,body,#map{height:100%;margin:0;background:#eaf1f4;}" +
-                ".leaflet-control-attribution{font-size:8px;opacity:.62;}" +
-                ".leaflet-control-zoom{border:0!important;box-shadow:0 3px 12px rgba(0,0,0,.18)!important;}" +
-                ".leaflet-control-zoom a{width:40px!important;height:40px!important;line-height:40px!important;font-size:24px!important;color:#17232d!important;}" +
-                ".bikeMarker{width:34px;height:34px;border-radius:50%;background:#fff;border:3px solid #2196F3;box-shadow:0 3px 10px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;}" +
-                ".bikeArrow{width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:22px solid #2196F3;transform-origin:50% 60%;}" +
-                "</style></head><body><div id='map'></div>" +
-                "<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>" +
-                "<script>" +
-                "var map=L.map('map',{zoomControl:true}).setView([55.917,21.068],13);" +
-                "map.zoomControl.setPosition('topright');" +
-                "L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);" +
-                "var icon=L.divIcon({className:'',html:'<div class=\"bikeMarker\"><div id=\"arrow\" class=\"bikeArrow\"></div></div>',iconSize:[40,40],iconAnchor:[20,20]});" +
-                "var marker=L.marker([55.917,21.068],{icon:icon}).addTo(map);" +
-                "var trail=L.polyline([],{color:'#2196F3',weight:6,opacity:.92}).addTo(map);" +
-                "var route=L.polyline([],{color:'#0B84FF',weight:7,opacity:.95}).addTo(map);" +
-                "function setPosition(lat,lon,bearing){marker.setLatLng([lat,lon]);trail.addLatLng([lat,lon]);map.panTo([lat,lon],{animate:true});var a=document.getElementById('arrow');if(a)a.style.transform='rotate('+bearing+'deg)';}" +
-                "function setRoute(points){route.setLatLngs(points);if(points&&points.length>1)map.fitBounds(route.getBounds(),{padding:[35,35]});}" +
-                "</script></body></html>";
-
-        mapWeb.loadDataWithBaseURL(
-                "https://trevoras.local/",
-                html,
-                "text/html",
-                "UTF-8",
-                null
+        NotificationManager nm = getSystemService(NotificationManager.class);
+        nm.createNotificationChannel(
+                new NotificationChannel(
+                        CH,
+                        "TREVORAS projekcija",
+                        NotificationManager.IMPORTANCE_LOW
+                )
         );
+
+        Notification n = new Notification.Builder(this, CH)
+                .setContentTitle("TREVORAS")
+                .setContentText("Ekrano projekcija aktyvi")
+                .setSmallIcon(android.R.drawable.stat_sys_upload)
+                .build();
+
+        if (Build.VERSION.SDK_INT >= 29) {
+            startForeground(
+                    42,
+                    n,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            );
+        } else {
+            startForeground(42, n);
+        }
     }
 
-    void requestLocation() {
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) {
+    @Override
+    public int onStartCommand(Intent i, int flags, int id) {
+        int result = i.getIntExtra(
+                "resultCode",
+                Activity.RESULT_CANCELED
+        );
 
-            requestPermissions(
-                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                    REQ_LOC
-            );
-            return;
+        Intent data = i.getParcelableExtra("data");
+        String host = i.getStringExtra("host");
+
+        // MainActivity jau perduoda 9038 iš WSS aptikimo.
+        int port = i.getIntExtra("port", 9038);
+
+        if (data == null || host == null || host.trim().isEmpty()) {
+            stopSelf();
+            return START_NOT_STICKY;
         }
 
         try {
-            lm.requestLocationUpdates(
-                    LocationManager.GPS_PROVIDER,
-                    1000,
-                    0,
-                    this
-            );
-
-            try {
-                lm.requestLocationUpdates(
-                        LocationManager.NETWORK_PROVIDER,
-                        5000,
-                        0,
-                        this
-                );
-            } catch (Exception ignored) {}
-
+            startProjection(result, data, host.trim(), port);
         } catch (Exception e) {
-            Toast.makeText(this,
-                    "GPS klaida: " + e.getMessage(),
-                    Toast.LENGTH_SHORT
-            ).show();
+            stopSelf();
         }
+
+        return START_NOT_STICKY;
     }
 
-    @Override
-    public void onRequestPermissionsResult(int r, String[] p, int[] g) {
-        super.onRequestPermissionsResult(r, p, g);
+    void startProjection(
+            int result,
+            Intent data,
+            String host,
+            int port
+    ) throws Exception {
 
-        if (r == REQ_LOC &&
-                g.length > 0 &&
-                g[0] == PackageManager.PERMISSION_GRANTED) {
+        MediaProjectionManager m =
+                (MediaProjectionManager)
+                        getSystemService(MEDIA_PROJECTION_SERVICE);
 
-            requestLocation();
-        }
-    }
+        projection = m.getMediaProjection(result, data);
 
-    @Override
-    public void onLocationChanged(Location l) {
-
-        double kmh = l.hasSpeed() ? l.getSpeed() * 3.6 : 0;
-
-        speed.setText(String.valueOf((int) Math.round(kmh)));
-        maxKmh = Math.max(maxKmh, kmh);
-
-        // 4-a statistikos kortelė dabar rodo GPS aukštį.
-        if (l.hasAltitude()) {
-            heading.setText(Math.round(l.getAltitude()) + " m");
-        } else {
-            heading.setText("— m");
-        }
-
-        if (tripRunning &&
-                lastLocation != null &&
-                l.hasAccuracy() &&
-                lastLocation.hasAccuracy() &&
-                l.getAccuracy() < 40 &&
-                lastLocation.getAccuracy() < 40) {
-
-            float d = lastLocation.distanceTo(l);
-
-            if (d >= 1 && d < 500) {
-                double deltaKm = d / 1000.0;
-                tripKm += deltaKm;
-                bikeOdometerKm += deltaKm;
-
-                if (prefs != null) {
-                    prefs.edit()
-                            .putFloat("bikeOdometerKm", (float) bikeOdometerKm)
-                            .apply();
-                }
-            }
-        }
-
-        lastLocation = l;
-        refreshTrip();
-
-        updateMap(l);
-
-        if (System.currentTimeMillis() - lastWeatherUpdate > 15 * 60 * 1000L) {
-            lastWeatherUpdate = System.currentTimeMillis();
-            updateWeather(l);
-        }
-    }
-
-    void updateMap(Location l) {
-        if (mapWeb == null || !mapReady) return;
-
-        double lat = l.getLatitude();
-        double lon = l.getLongitude();
-        float bearing = l.hasBearing() ? l.getBearing() : 0f;
-
-        String js = String.format(
-                Locale.US,
-                "javascript:setPosition(%.7f,%.7f,%.1f)",
-                lat, lon, bearing
+        MediaFormat f = MediaFormat.createVideoFormat(
+                MediaFormat.MIMETYPE_VIDEO_AVC,
+                WIDTH,
+                HEIGHT
         );
 
-        mapWeb.evaluateJavascript(js, null);
+        f.setInteger(
+                MediaFormat.KEY_COLOR_FORMAT,
+                MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
+        );
 
-        long sec = accumulatedTripSeconds;
-        if (tripRunning && tripStart > 0) {
-            sec += (System.currentTimeMillis() - tripStart) / 1000;
+        // Bitrate paliekame praktišką; TFT protokolui svarbiausi čia
+        // 1280x768, AVC, 15 fps ir fragmentavimo formatas.
+        f.setInteger(MediaFormat.KEY_BIT_RATE, 2_500_000);
+        f.setInteger(MediaFormat.KEY_FRAME_RATE, FPS);
+        f.setInteger(
+                MediaFormat.KEY_I_FRAME_INTERVAL,
+                IFRAME_INTERVAL
+        );
+
+        // Originalios programėlės AVC profilis/lygis.
+        if (Build.VERSION.SDK_INT >= 21) {
+            f.setInteger(MediaFormat.KEY_PROFILE, 8);
+            f.setInteger(MediaFormat.KEY_LEVEL, 512);
         }
 
-        double avg = sec > 0 ? tripKm / (sec / 3600.0) : 0;
-        if (navAvgSpeed != null) {
-            navAvgSpeed.setText(Math.round(avg) + " km/h");
-        }
+        codec = MediaCodec.createEncoderByType(
+                MediaFormat.MIMETYPE_VIDEO_AVC
+        );
+
+        codec.configure(
+                f,
+                null,
+                null,
+                MediaCodec.CONFIGURE_FLAG_ENCODE
+        );
+
+        Surface surface = codec.createInputSurface();
+        codec.start();
+
+        projection.createVirtualDisplay(
+                "TREVORAS",
+                WIDTH,
+                HEIGHT,
+                240,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                surface,
+                null,
+                null
+        );
+
+        tftAddress = InetAddress.getByName(host);
+
+        // SVARBU: originali programėlė valdymą IR video siunčia per tą pačią
+        // WSS UDP sesiją, kurios telefono pusės portas yra 9039.
+        // Todėl čia nekuriame atskiro DatagramSocket su atsitiktiniu source portu.
+
+        running = true;
+
+        worker = new Thread(
+                () -> encodeLoop(port),
+                "TrevorasH264"
+        );
+
+        worker.start();
     }
 
-    void showRouteInApp() {
-        String q = destination.getText().toString().trim();
+    void encodeLoop(int port) {
+        try {
+            MediaCodec.BufferInfo info =
+                    new MediaCodec.BufferInfo();
 
-        if (q.isEmpty()) {
-            Toast.makeText(this, "Įrašyk kelionės tikslą", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        if (lastLocation == null) {
-            Toast.makeText(this, "Dar laukiama GPS vietos", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        if (navInstruction != null) navInstruction.setText("Skaičiuojamas maršrutas…");
-        if (navNextDistance != null) navNextDistance.setText(q);
-
-        final double fromLat = lastLocation.getLatitude();
-        final double fromLon = lastLocation.getLongitude();
-
-        Executors.newSingleThreadExecutor().execute(() -> {
-            try {
-                String geoUrl = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" +
-                        URLEncoder.encode(q, "UTF-8");
-
-                HttpURLConnection geoCon = (HttpURLConnection) new URL(geoUrl).openConnection();
-                geoCon.setConnectTimeout(7000);
-                geoCon.setReadTimeout(7000);
-                geoCon.setRequestProperty("User-Agent", "TREVORAS-Android/1.0");
-
-                String geoBody = readAll(geoCon);
-                JSONArray geo = new JSONArray(geoBody);
-
-                if (geo.length() == 0) throw new Exception("Vieta nerasta");
-
-                JSONObject place = geo.getJSONObject(0);
-                double toLat = place.getDouble("lat");
-                double toLon = place.getDouble("lon");
-
-                String routeUrl = String.format(
-                        Locale.US,
-                        "https://router.project-osrm.org/route/v1/driving/%.7f,%.7f;%.7f,%.7f?overview=full&geometries=geojson&steps=true",
-                        fromLon, fromLat, toLon, toLat
+            while (running) {
+                int ix = codec.dequeueOutputBuffer(
+                        info,
+                        10000
                 );
 
-                HttpURLConnection routeCon = (HttpURLConnection) new URL(routeUrl).openConnection();
-                routeCon.setConnectTimeout(9000);
-                routeCon.setReadTimeout(9000);
-                routeCon.setRequestProperty("User-Agent", "TREVORAS-Android/1.0");
+                if (ix == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    // Codec config paprastai ateina ir encoded sraute.
+                    // Sąmoningai nesiunčiame CSD kaip atskirų "raw TCP"
+                    // baitų, nes TFT laukia WSS UDP video paketų.
 
-                JSONObject root = new JSONObject(readAll(routeCon));
-                JSONArray routes = root.getJSONArray("routes");
-                if (routes.length() == 0) throw new Exception("Maršrutas nerastas");
+                } else if (ix >= 0) {
+                    ByteBuffer b = codec.getOutputBuffer(ix);
 
-                JSONObject route = routes.getJSONObject(0);
-                double meters = route.getDouble("distance");
-                double seconds = route.getDouble("duration");
+                    if (b != null && info.size > 0) {
+                        b.position(info.offset);
+                        b.limit(info.offset + info.size);
 
-                JSONArray coords = route.getJSONObject("geometry").getJSONArray("coordinates");
-                StringBuilder points = new StringBuilder("[");
-                for (int i = 0; i < coords.length(); i++) {
-                    JSONArray c = coords.getJSONArray(i);
-                    if (i > 0) points.append(',');
-                    points.append('[').append(c.getDouble(1)).append(',').append(c.getDouble(0)).append(']');
-                }
-                points.append(']');
+                        byte[] frame = new byte[info.size];
+                        b.get(frame);
 
-                String instruction = "Važiuokite maršrutu";
-                String nextDistance = "";
-
-                try {
-                    JSONArray legs = route.getJSONArray("legs");
-                    JSONArray steps = legs.getJSONObject(0).getJSONArray("steps");
-                    if (steps.length() > 1) {
-                        JSONObject step = steps.getJSONObject(1);
-                        JSONObject maneuver = step.getJSONObject("maneuver");
-                        String type = maneuver.optString("type", "turn");
-                        String modifier = maneuver.optString("modifier", "");
-                        instruction = maneuverLt(type, modifier);
-                        nextDistance = formatDistance(step.optDouble("distance", 0));
-                    }
-                } catch (Exception ignored) {}
-
-                final String fInstruction = instruction;
-                final String fNextDistance = nextDistance;
-                final String fPoints = points.toString();
-                final String totalDistance = formatDistance(meters);
-                final String eta = formatDuration(seconds);
-
-                runOnUiThread(() -> {
-                    if (mapWeb != null) {
-                        mapWeb.evaluateJavascript("javascript:setRoute(" + fPoints + ")", null);
-                    }
-                    if (navInstruction != null) navInstruction.setText(fInstruction);
-                    if (navNextDistance != null) navNextDistance.setText(fNextDistance);
-                    if (navDistance != null) navDistance.setText(totalDistance);
-                    if (navEta != null) navEta.setText(eta);
-                });
-
-            } catch (Exception e) {
-                runOnUiThread(() -> {
-                    if (navInstruction != null) navInstruction.setText("Maršruto apskaičiuoti nepavyko");
-                    if (navNextDistance != null) navNextDistance.setText(e.getMessage() == null ? "" : e.getMessage());
-                    Toast.makeText(this, "Navigacijos klaida", Toast.LENGTH_SHORT).show();
-                });
-            }
-        });
-    }
-
-    String readAll(HttpURLConnection con) throws Exception {
-        BufferedReader br = new BufferedReader(new InputStreamReader(con.getInputStream()));
-        StringBuilder sb = new StringBuilder();
-        String line;
-        while ((line = br.readLine()) != null) sb.append(line);
-        br.close();
-        return sb.toString();
-    }
-
-    String maneuverLt(String type, String modifier) {
-        if ("arrive".equals(type)) return "Atvykote į kelionės tikslą";
-        if (modifier.contains("left")) return "Sukite į kairę";
-        if (modifier.contains("right")) return "Sukite į dešinę";
-        if ("roundabout".equals(type) || "rotary".equals(type)) return "Įvažiuokite į žiedą";
-        if ("merge".equals(type)) return "Įsiliekite į eismą";
-        return "Važiuokite tiesiai";
-    }
-
-    String formatDistance(double meters) {
-        if (meters < 1000) return Math.round(meters) + " m";
-        return String.format(Locale.US, "%.1f km", meters / 1000.0);
-    }
-
-    String formatDuration(double seconds) {
-        long total = Math.max(0, Math.round(seconds));
-        long h = total / 3600;
-        long m = (total % 3600) / 60;
-        if (h > 0) return String.format(Locale.US, "%d:%02d", h, m);
-        return m + " min";
-    }
-
-    void updateWeather(Location l) {
-
-        final double lat = l.getLatitude();
-        final double lon = l.getLongitude();
-
-        if (weatherDesc != null) weatherDesc.setText("Atnaujinama…");
-
-        Executors.newSingleThreadExecutor().execute(() -> {
-
-            HttpURLConnection con = null;
-
-            try {
-                String url =
-                        "https://api.open-meteo.com/v1/forecast" +
-                        "?latitude=" + lat +
-                        "&longitude=" + lon +
-                        "&current=temperature_2m,weather_code" +
-                        "&timezone=auto";
-
-                con = (HttpURLConnection) new URL(url).openConnection();
-                con.setConnectTimeout(5000);
-                con.setReadTimeout(5000);
-                con.setRequestMethod("GET");
-
-                BufferedReader br = new BufferedReader(
-                        new InputStreamReader(con.getInputStream())
-                );
-
-                StringBuilder sb = new StringBuilder();
-                String line;
-
-                while ((line = br.readLine()) != null) {
-                    sb.append(line);
-                }
-
-                br.close();
-
-                JSONObject root = new JSONObject(sb.toString());
-                JSONObject current = root.getJSONObject("current");
-
-                double temp = current.getDouble("temperature_2m");
-                int code = current.getInt("weather_code");
-
-                String city = getLocationName(lat, lon);
-                String desc = weatherCodeText(code);
-
-                runOnUiThread(() -> {
-                    if (weatherTemp != null) {
-                        weatherTemp.setText(
-                                weatherIcon(code) + "  " +
-                                Math.round(temp) + "°C"
+                        sendEncodedFrame(
+                                frame,
+                                port
                         );
                     }
 
-                    if (weatherCity != null) {
-                        weatherCity.setText(city);
-                    }
-
-                    if (weatherDesc != null) {
-                        weatherDesc.setText(desc);
-                    }
-                });
-
-            } catch (Exception e) {
-
-                runOnUiThread(() -> {
-                    if (weatherTemp != null) weatherTemp.setText("—°C");
-                    if (weatherCity != null) weatherCity.setText("Dabartinė vieta");
-                    if (weatherDesc != null) weatherDesc.setText("Orų duomenų nėra");
-                });
-
-            } finally {
-                if (con != null) con.disconnect();
-            }
-        });
-    }
-
-    String getLocationName(double lat, double lon) {
-
-        try {
-            Geocoder geocoder = new Geocoder(this, new Locale("lt", "LT"));
-
-            List<Address> addresses =
-                    geocoder.getFromLocation(lat, lon, 1);
-
-            if (addresses != null && !addresses.isEmpty()) {
-
-                Address a = addresses.get(0);
-
-                if (a.getLocality() != null) return a.getLocality();
-                if (a.getSubAdminArea() != null) return a.getSubAdminArea();
-                if (a.getAdminArea() != null) return a.getAdminArea();
-            }
-
-        } catch (Exception ignored) {}
-
-        return "Dabartinė vieta";
-    }
-
-    String weatherIcon(int code) {
-
-        if (code == 0) return "☀";
-        if (code <= 3) return "☁";
-        if (code == 45 || code == 48) return "🌫";
-        if (code >= 51 && code <= 67) return "🌧";
-        if (code >= 71 && code <= 77) return "❄";
-        if (code >= 80 && code <= 82) return "🌦";
-        if (code >= 95) return "⛈";
-
-        return "☁";
-    }
-
-    String weatherCodeText(int code) {
-
-        switch (code) {
-            case 0: return "Giedra";
-            case 1: return "Daugiausia giedra";
-            case 2: return "Dalinis debesuotumas";
-            case 3: return "Debesuota";
-            case 45:
-            case 48: return "Rūkas";
-            case 51:
-            case 53:
-            case 55: return "Dulksna";
-            case 56:
-            case 57: return "Šąlanti dulksna";
-            case 61:
-            case 63:
-            case 65: return "Lietus";
-            case 66:
-            case 67: return "Šąlantis lietus";
-            case 71:
-            case 73:
-            case 75:
-            case 77: return "Sniegas";
-            case 80:
-            case 81:
-            case 82: return "Lietaus šuorai";
-            case 85:
-            case 86: return "Sniego šuorai";
-            case 95:
-            case 96:
-            case 99: return "Perkūnija";
-            default: return "Orų duomenys";
-        }
-    }
-
-    void startTrip() {
-
-        if (!tripRunning) {
-            tripRunning = true;
-            tripStart = System.currentTimeMillis();
-
-            Toast.makeText(this,
-                    "Kelionė pradėta",
-                    Toast.LENGTH_SHORT
-            ).show();
-
-        } else {
-            accumulatedTripSeconds +=
-                    (System.currentTimeMillis() - tripStart) / 1000;
-
-            tripRunning = false;
-            tripStart = 0;
-
-            Toast.makeText(this,
-                    "Kelionė pristabdyta",
-                    Toast.LENGTH_SHORT
-            ).show();
-        }
-    }
-
-    void resetTrip() {
-
-        tripKm = 0;
-        maxKmh = 0;
-        accumulatedTripSeconds = 0;
-
-        if (tripRunning) {
-            tripStart = System.currentTimeMillis();
-        } else {
-            tripStart = 0;
-        }
-
-        lastLocation = null;
-
-        refreshTrip();
-        updateTripTime();
-    }
-
-    void refreshTrip() {
-
-        trip.setText(
-                String.format(
-                        Locale.US,
-                        "%.1f km",
-                        tripKm
-                )
-        );
-
-        maxspeed.setText(
-                Math.round(maxKmh) + " km/h"
-        );
-
-        updateServiceUi();
-    }
-
-    void updateServiceUi() {
-        if (serviceRemaining == null || serviceNext == null) return;
-
-        if (serviceDueKm < 0 && serviceDueDateMs <= 0) {
-            serviceRemaining.setText("Nenustatyta");
-            serviceNext.setText("Paliesk „Nenustatyta“ ir įvesk ridą");
-            return;
-        }
-
-        double kmLeft = serviceDueKm - bikeOdometerKm;
-        long now = System.currentTimeMillis();
-        long daysLeft = serviceDueDateMs > 0
-                ? (long) Math.ceil((serviceDueDateMs - now) / 86400000.0)
-                : Long.MAX_VALUE;
-
-        if (kmLeft <= 0 || daysLeft <= 0) {
-            serviceRemaining.setText("SERVISAS DABAR");
-        } else if (daysLeft != Long.MAX_VALUE && daysLeft < 30) {
-            serviceRemaining.setText("Liko " + daysLeft + " d.");
-        } else {
-            serviceRemaining.setText("Liko " + Math.max(0, Math.round(kmLeft)) + " km");
-        }
-
-        String dateText = serviceDueDateMs > 0
-                ? new SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
-                    .format(new Date(serviceDueDateMs))
-                : "—";
-
-        String kmText = serviceDueKm >= 0
-                ? Math.round(serviceDueKm) + " km"
-                : "— km";
-
-        serviceNext.setText("Kitas: " + kmText + " / " + dateText);
-    }
-
-    void showServiceSetup() {
-        final android.widget.LinearLayout box = new android.widget.LinearLayout(this);
-        box.setOrientation(android.widget.LinearLayout.VERTICAL);
-        int pad = (int) (18 * getResources().getDisplayMetrics().density);
-        box.setPadding(pad, pad / 2, pad, 0);
-
-        final EditText odoInput = new EditText(this);
-        odoInput.setHint("Dabartinė motociklo rida, km");
-        odoInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER |
-                android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        odoInput.setText(String.format(Locale.US, "%.0f", bikeOdometerKm));
-        box.addView(odoInput);
-
-        final EditText intervalInput = new EditText(this);
-        intervalInput.setHint("Serviso intervalas, km");
-        intervalInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        intervalInput.setText(String.valueOf(serviceIntervalKm));
-        box.addView(intervalInput);
-
-        new AlertDialog.Builder(this)
-                .setTitle("Serviso nustatymai")
-                .setMessage("Įvesk dabartinę ridą ir po kiek kilometrų priminti kitą servisą. Datos terminas bus 12 mėn.")
-                .setView(box)
-                .setPositiveButton("IŠSAUGOTI", (dialog, which) -> {
-                    try {
-                        double odo = Double.parseDouble(
-                                odoInput.getText().toString().trim().replace(',', '.'));
-                        int interval = Integer.parseInt(
-                                intervalInput.getText().toString().trim());
-
-                        if (odo < 0 || interval <= 0) throw new Exception();
-
-                        bikeOdometerKm = odo;
-                        serviceIntervalKm = interval;
-                        serviceDueKm = bikeOdometerKm + serviceIntervalKm;
-
-                        Calendar c = Calendar.getInstance();
-                        c.add(Calendar.MONTH, 12);
-                        serviceDueDateMs = c.getTimeInMillis();
-
-                        prefs.edit()
-                                .putFloat("bikeOdometerKm", (float) bikeOdometerKm)
-                                .putInt("serviceIntervalKm", serviceIntervalKm)
-                                .putFloat("serviceDueKm", (float) serviceDueKm)
-                                .putLong("serviceDueDateMs", serviceDueDateMs)
-                                .apply();
-
-                        updateServiceUi();
-                        Toast.makeText(this, "Serviso priminimas išsaugotas",
-                                Toast.LENGTH_SHORT).show();
-
-                    } catch (Exception e) {
-                        Toast.makeText(this, "Patikrink įvestą ridą ir intervalą",
-                                Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .setNegativeButton("ATŠAUKTI", null)
-                .show();
-    }
-
-    void completeService() {
-        new AlertDialog.Builder(this)
-                .setTitle("Servisas atliktas?")
-                .setMessage("Pažymėti servisą atliktu ir suplanuoti kitą po " +
-                        serviceIntervalKm + " km arba 12 mėn.?")
-                .setPositiveButton("TAIP", (dialog, which) -> {
-                    serviceDueKm = bikeOdometerKm + serviceIntervalKm;
-
-                    Calendar c = Calendar.getInstance();
-                    c.add(Calendar.MONTH, 12);
-                    serviceDueDateMs = c.getTimeInMillis();
-
-                    prefs.edit()
-                            .putFloat("serviceDueKm", (float) serviceDueKm)
-                            .putLong("serviceDueDateMs", serviceDueDateMs)
-                            .apply();
-
-                    updateServiceUi();
-                    Toast.makeText(this, "Servisas pažymėtas atliktu",
-                            Toast.LENGTH_SHORT).show();
-                })
-                .setNegativeButton("NE", null)
-                .show();
-    }
-
-    void updateFuelUi() {
-        if (fuelPercent == null || fuelInfo == null || fuelProgress == null) return;
-
-        if (fuelLevel < 0) {
-            fuelPercent.setText("— %");
-            fuelProgress.setProgress(0);
-            fuelInfo.setText("Paliesk „— %“ ir įvesk kuro lygį");
-        } else {
-            fuelPercent.setText(fuelLevel + " %");
-            fuelProgress.setProgress(fuelLevel);
-            fuelInfo.setText("Įvesta rankiniu būdu");
-        }
-    }
-
-    void showFuelSetup() {
-        final EditText input = new EditText(this);
-        input.setHint("0–100");
-        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        if (fuelLevel >= 0) input.setText(String.valueOf(fuelLevel));
-
-        int pad = (int) (24 * getResources().getDisplayMetrics().density);
-
-        new AlertDialog.Builder(this)
-                .setTitle("Kuro lygis")
-                .setMessage("Kol kas TFT kuro duomenų dar neskaitome automatiškai. Įvesk apytikslį kuro lygį procentais.")
-                .setView(input)
-                .setPositiveButton("IŠSAUGOTI", (dialog, which) -> {
-                    try {
-                        int value = Integer.parseInt(input.getText().toString().trim());
-                        if (value < 0 || value > 100) throw new Exception();
-
-                        fuelLevel = value;
-                        prefs.edit().putInt("fuelLevel", fuelLevel).apply();
-                        updateFuelUi();
-
-                    } catch (Exception e) {
-                        Toast.makeText(this, "Įvesk skaičių nuo 0 iki 100",
-                                Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .setNegativeButton("ATŠAUKTI", null)
-                .show();
-    }
-
-    void updateTripTime() {
-
-        long sec = accumulatedTripSeconds;
-
-        if (tripRunning && tripStart > 0) {
-            sec += (System.currentTimeMillis() - tripStart) / 1000;
-        }
-
-        time.setText(
-                String.format(
-                        Locale.US,
-                        "%02d:%02d",
-                        sec / 3600,
-                        (sec / 60) % 60
-                )
-        );
-    }
-
-    void updateLiveClock() {
-
-        Date now = new Date();
-
-        if (heroClock != null) {
-            heroClock.setText(
-                    new SimpleDateFormat(
-                            "HH:mm",
-                            Locale.getDefault()
-                    ).format(now)
-            );
-        }
-
-        if (heroDate != null) {
-            heroDate.setText(
-                    new SimpleDateFormat(
-                            "yyyy-MM-dd",
-                            Locale.getDefault()
-                    ).format(now)
-            );
-        }
-    }
-
-    Runnable ticker = new Runnable() {
-        public void run() {
-
-            updateLiveClock();
-            updateTripTime();
-            updateMediaInfo();
-
-            handler.postDelayed(this, 1000);
-        }
-    };
-
-    void showSettings() {
-
-        String[] items = {
-                "Datos ir laiko nustatymai",
-                "Vietos / GPS nustatymai",
-                "Programėlės nustatymai",
-                "TFT ryšio būsena"
-        };
-
-        new AlertDialog.Builder(this)
-                .setTitle("TREVORAS nustatymai")
-                .setItems(items, (dialog, which) -> {
-
-                    try {
-                        if (which == 0) {
-                            startActivity(
-                                    new Intent(Settings.ACTION_DATE_SETTINGS)
-                            );
-
-                        } else if (which == 1) {
-                            startActivity(
-                                    new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
-                            );
-
-                        } else if (which == 2) {
-                            Intent i = new Intent(
-                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                    Uri.parse("package:" + getPackageName())
-                            );
-                            startActivity(i);
-
-                        } else {
-                            new AlertDialog.Builder(this)
-                                    .setTitle("TFT")
-                                    .setMessage(
-                                            tftVerifiedConnected
-                                                    ? "TFT ryšys patvirtintas."
-                                                    : "TFT šiuo metu neprijungtas / ryšys nepatvirtintas."
-                                    )
-                                    .setPositiveButton("Gerai", null)
-                                    .show();
-                        }
-
-                    } catch (Exception e) {
-                        Toast.makeText(
-                                this,
-                                "Nepavyko atidaryti nustatymų",
-                                Toast.LENGTH_SHORT
-                        ).show();
-                    }
-                })
-                .setNegativeButton("Uždaryti", null)
-                .show();
-    }
-
-    void navigate(boolean waze) {
-
-        String q = destination.getText().toString().trim();
-
-        if (q.isEmpty()) {
-            Toast.makeText(
-                    this,
-                    "Įrašyk kelionės tikslą",
-                    Toast.LENGTH_SHORT
-            ).show();
-            return;
-        }
-
-        Uri u = waze
-                ? Uri.parse(
-                        "https://waze.com/ul?q=" +
-                        Uri.encode(q) +
-                        "&navigate=yes"
-                )
-                : Uri.parse(
-                        "google.navigation:q=" +
-                        Uri.encode(q) +
-                        "&mode=d"
-                );
-
-        Intent i = new Intent(Intent.ACTION_VIEW, u);
-
-        if (waze) {
-            i.setPackage("com.waze");
-        } else {
-            i.setPackage("com.google.android.apps.maps");
-        }
-
-        try {
-            startActivity(i);
-
-        } catch (Exception e) {
-
-            startActivity(
-                    new Intent(
-                            Intent.ACTION_VIEW,
-                            Uri.parse(
-                                    "https://www.google.com/maps/search/" +
-                                    "?api=1&query=" +
-                                    Uri.encode(q)
-                            )
-                    )
-            );
-        }
-    }
-
-    void openPackage(String p) {
-
-        Intent i =
-                getPackageManager().getLaunchIntentForPackage(p);
-
-        if (i != null) {
-            startActivity(i);
-        } else {
-            Toast.makeText(
-                    this,
-                    "Programėlė neįdiegta",
-                    Toast.LENGTH_SHORT
-            ).show();
-        }
-    }
-
-    List<MediaController> controllers() {
-
-        try {
-            MediaSessionManager msm =
-                    (MediaSessionManager)
-                            getSystemService(MEDIA_SESSION_SERVICE);
-
-            return msm.getActiveSessions(
-                    new ComponentName(this, MediaListener.class)
-            );
-
-        } catch (Exception e) {
-            return Collections.emptyList();
-        }
-    }
-
-    MediaController bestController() {
-
-        for (MediaController c : controllers()) {
-            if ("com.spotify.music".equals(c.getPackageName())) {
-                return c;
-            }
-        }
-
-        List<MediaController> cs = controllers();
-
-        return cs.isEmpty() ? null : cs.get(0);
-    }
-
-    interface MediaAction {
-        void run(MediaController.TransportControls c);
-    }
-
-    void media(MediaAction a) {
-
-        MediaController c = bestController();
-
-        if (c != null) {
-            a.run(c.getTransportControls());
-        } else {
-            Toast.makeText(
-                    this,
-                    "Leisk muzikos valdymą",
-                    Toast.LENGTH_SHORT
-            ).show();
-        }
-    }
-
-    void togglePlay() {
-
-        MediaController c = bestController();
-
-        if (c == null) {
-            Toast.makeText(
-                    this,
-                    "Leisk muzikos valdymą",
-                    Toast.LENGTH_SHORT
-            ).show();
-            return;
-        }
-
-        PlaybackState s = c.getPlaybackState();
-
-        if (s != null &&
-                s.getState() == PlaybackState.STATE_PLAYING) {
-
-            c.getTransportControls().pause();
-
-        } else {
-            c.getTransportControls().play();
-        }
-    }
-
-    void updateMediaInfo() {
-
-        MediaController c = bestController();
-
-        if (c == null) return;
-
-        MediaMetadata m = c.getMetadata();
-
-        if (m == null) return;
-
-        CharSequence t =
-                m.getText(MediaMetadata.METADATA_KEY_TITLE);
-
-        CharSequence a =
-                m.getText(MediaMetadata.METADATA_KEY_ARTIST);
-
-        if (t != null) track.setText(t);
-        if (a != null) artist.setText(a);
-    }
-
-    void setTftDisconnected() {
-
-        tftVerifiedConnected = false;
-
-        if (tftBadgeText != null) {
-            tftBadgeText.setText("TFT\nNEPRIJUNGTAS");
-        }
-
-        if (tftDot != null) {
-            tftDot.setTextColor(
-                    Color.parseColor("#9AA6AF")
-            );
-        }
-    }
-
-    void setTftConnected(String host, int port) {
-
-        tftVerifiedConnected = true;
-
-        if (tftBadgeText != null) {
-            tftBadgeText.setText("TFT\nPRIJUNGTAS");
-        }
-
-        if (tftDot != null) {
-            tftDot.setTextColor(
-                    Color.parseColor("#15C66A")
-            );
-        }
-
-        castStatus.setText(
-                "TFT ryšys patvirtintas: " +
-                host + ":" + port
-        );
-    }
-
-    void testTft() {
-
-        String h =
-                castIp.getText().toString().trim();
-
-        int p;
-
-        try {
-            p = Integer.parseInt(
-                    castPort.getText().toString()
-            );
-        } catch (Exception e) {
-            castStatus.setText(
-                    "Įvesk TFT portą"
-            );
-            setTftDisconnected();
-            return;
-        }
-
-        final int port = p;
-
-        castStatus.setText(
-                "Tikrinamas " + h + ":" + port + "…"
-        );
-
-        setTftDisconnected();
-
-        Executors.newSingleThreadExecutor().execute(() -> {
-
-            boolean ok = false;
-
-            try (Socket s = new Socket()) {
-                s.connect(
-                        new InetSocketAddress(h, port),
-                        1000
-                );
-                ok = true;
-            } catch (Exception ignored) {}
-
-            boolean finalOk = ok;
-
-            runOnUiThread(() -> {
-
-                if (finalOk) {
-                    setTftConnected(h, port);
-                } else {
-                    castStatus.setText(
-                            "TFT neatsako: " +
-                            h + ":" + port
-                    );
-                    setTftDisconnected();
+                    codec.releaseOutputBuffer(ix, false);
                 }
-            });
-        });
+            }
+
+        } catch (Exception ignored) {
+        } finally {
+            closeAll();
+        }
     }
 
-    void requestCast() {
+    /**
+     * Originalios programėlės WSS H.264 fragmentavimo schema.
+     *
+     * Pirmas fragmentas:
+     *   [0] viso kadro ilgis, bits 0..7
+     *   [1] viso kadro ilgis, bits 8..15
+     *   [2] viso kadro ilgis, bits 16..23
+     *   [3] 0
+     *
+     * Tolesni fragmentai:
+     *   [0] šio fragmento duomenų ilgis, bits 0..7
+     *   [1] šio fragmento duomenų ilgis, bits 8..15
+     *   [2] 0
+     *   [3] fragmento indeksas
+     *
+     * H.264 duomenys prasideda nuo packet[4].
+     */
+    void sendEncodedFrame(
+            byte[] frame,
+            int port
+    ) throws Exception {
 
-        // TFT yra 1280x768 (landscape). Prieš MediaProjection leidimo langą
-        // priverčiame TREVORAS Activity persijungti į landscape, kad Android
-        // sukurtų gulsčią projekcijos geometriją, o ne bandytų portrait ekraną
-        // tiesiog sugrūsti į 1280x768 encoderio Surface.
-        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        if (frame == null || frame.length == 0) {
+            return;
+        }
 
-        // Duodame Android trumpą momentą užbaigti orientacijos pakeitimą.
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            Intent capture = mpm.createScreenCaptureIntent();
-            startActivityForResult(capture, REQ_CAST);
-        }, 450);
+        // Originalus kodas atmeta > 24 bitų dydžio kadrą.
+        if (frame.length > 0xFFFFFF) {
+            return;
+        }
+
+        int offset = 0;
+        int fragmentIndex = 0;
+
+        while (offset < frame.length && running) {
+            int chunkLength = Math.min(
+                    MAX_CHUNK,
+                    frame.length - offset
+            );
+
+            byte[] packet =
+                    new byte[chunkLength + 4];
+
+            if (fragmentIndex == 0) {
+                int frameLength = frame.length;
+
+                packet[0] =
+                        (byte) (frameLength & 0xFF);
+
+                packet[1] =
+                        (byte) ((frameLength >> 8) & 0xFF);
+
+                packet[2] =
+                        (byte) ((frameLength >> 16) & 0xFF);
+
+                packet[3] = 0;
+
+            } else {
+                packet[0] =
+                        (byte) (chunkLength & 0xFF);
+
+                packet[1] =
+                        (byte) ((chunkLength >> 8) & 0xFF);
+
+                packet[2] = 0;
+
+                packet[3] =
+                        (byte) (fragmentIndex & 0xFF);
+            }
+
+            System.arraycopy(
+                    frame,
+                    offset,
+                    packet,
+                    4,
+                    chunkLength
+            );
+
+            // Siunčiame per TrevorasWssClient jau atidarytą local UDP 9039 socketą.
+            TrevorasWssClient.sendVideoPacketViaActiveSession(packet);
+
+            offset += chunkLength;
+            fragmentIndex++;
+        }
+    }
+
+    void closeAll() {
+        running = false;
+
+        if (worker != null &&
+                worker != Thread.currentThread()) {
+            worker.interrupt();
+            worker = null;
+        }
+
+        try {
+            if (codec != null) {
+                codec.stop();
+                codec.release();
+            }
+        } catch (Exception ignored) {
+        }
+
+        codec = null;
+
+        try {
+            if (projection != null) {
+                projection.stop();
+            }
+        } catch (Exception ignored) {
+        }
+
+        projection = null;
     }
 
     @Override
-    protected void onActivityResult(
-            int r,
-            int result,
-            Intent data
-    ) {
-
-        super.onActivityResult(
-                r,
-                result,
-                data
-        );
-
-        if (r == REQ_CAST &&
-                result == RESULT_OK &&
-                data != null) {
-
-            Intent s =
-                    new Intent(
-                            this,
-                            CastService.class
-                    );
-
-            s.putExtra("resultCode", result);
-            s.putExtra("data", data);
-
-            s.putExtra(
-                    "host",
-                    castIp.getText()
-                            .toString()
-                            .trim()
-            );
-
-            int p;
-
-            try {
-                p = Integer.parseInt(
-                        castPort.getText()
-                                .toString()
-                );
-            } catch (Exception ignored) {
-                castStatus.setText(
-                        "Projekcijai reikia patvirtinto porto"
-                );
-                return;
-            }
-
-            s.putExtra("port", p);
-
-            startForegroundService(s);
-
-            castStatus.setText(
-                    "Eksperimentinė H.264 projekcija paleista"
-            );
-        }
-    }
-
-    private void autoDiscover() {
-
-        castStatus.setText(
-                "🔍 TFT paieška pradėta..."
-        );
-
-        setTftDisconnected();
-
-        new Thread(() -> {
-
-            try {
-
-                LinkedHashSet<String> prefixes =
-                        new LinkedHashSet<>();
-
-                Enumeration<NetworkInterface> interfaces =
-                        NetworkInterface.getNetworkInterfaces();
-
-                while (interfaces.hasMoreElements()) {
-
-                    NetworkInterface ni =
-                            interfaces.nextElement();
-
-                    Enumeration<InetAddress> addresses =
-                            ni.getInetAddresses();
-
-                    while (addresses.hasMoreElements()) {
-
-                        InetAddress addr =
-                                addresses.nextElement();
-
-                        if (addr instanceof Inet4Address &&
-                                !addr.isLoopbackAddress()) {
-
-                            String ip =
-                                    addr.getHostAddress();
-
-                            if (ip.startsWith("192.168.") ||
-                                    ip.startsWith("10.") ||
-                                    ip.startsWith("172.")) {
-
-                                int lastDot =
-                                        ip.lastIndexOf(".");
-
-                                if (lastDot > 0) {
-                                    prefixes.add(
-                                            ip.substring(
-                                                    0,
-                                                    lastDot
-                                            )
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-
-                prefixes.add("192.168.43");
-                prefixes.add("192.168.1");
-                prefixes.add("192.168.0");
-
-                int[] ports = {
-                        7236, 8000, 8080,
-                        8899, 9000, 9999,
-                        10000, 5000, 5555,
-                        7000, 8554
-                };
-
-                for (String prefix : prefixes) {
-
-                    for (int host = 2;
-                         host <= 254;
-                         host++) {
-
-                        String ip =
-                                prefix + "." + host;
-
-                        if (host % 10 == 0) {
-                            runOnUiThread(() ->
-                                    castStatus.setText(
-                                            "🔍 Tikrinama: " + ip
-                                    )
-                            );
-                        }
-
-                        for (int port : ports) {
-
-                            try (Socket socket =
-                                         new Socket()) {
-
-                                socket.connect(
-                                        new InetSocketAddress(
-                                                ip,
-                                                port
-                                        ),
-                                        100
-                                );
-
-                                final String foundIp = ip;
-                                final int foundPort = port;
-
-                                runOnUiThread(() -> {
-
-                                    castIp.setText(foundIp);
-                                    castPort.setText(
-                                            String.valueOf(
-                                                    foundPort
-                                            )
-                                    );
-
-                                    // Svarbu: atviras portas dar nereiškia,
-                                    // kad TFT protokolas patvirtintas.
-                                    castStatus.setText(
-                                            "Rastas galimas įrenginys: " +
-                                            foundIp + ":" +
-                                            foundPort +
-                                            ". Spausk TESTAS."
-                                    );
-
-                                    setTftDisconnected();
-                                });
-
-                                return;
-
-                            } catch (Exception ignored) {}
-                        }
-                    }
-                }
-
-                runOnUiThread(() -> {
-
-                    castStatus.setText(
-                            "TFT kandidatas nerastas."
-                    );
-
-                    setTftDisconnected();
-                });
-
-            } catch (Exception e) {
-
-                runOnUiThread(() -> {
-
-                    castStatus.setText(
-                            "Skenavimo klaida: " +
-                            e.getMessage()
-                    );
-
-                    setTftDisconnected();
-                });
-            }
-
-        }).start();
-    }
-
-    private void deepScan() {
-
-        final String ip =
-                castIp.getText()
-                        .toString()
-                        .trim();
-
-        if (ip.isEmpty()) {
-            castStatus.setText(
-                    "Įvesk TFT IP adresą"
-            );
-            return;
-        }
-
-        setTftDisconnected();
-
-        castStatus.setText(
-                "Gilus skenavimas: " + ip
-        );
-
-        discoveryLog.setText(
-                "Tikrinami TCP portai 1–12000...\n"
-        );
-
-        final int startPort = 1;
-        final int endPort = 12000;
-        final int workerCount = 48;
-
-        final AtomicInteger nextPort =
-                new AtomicInteger(startPort);
-
-        final AtomicInteger activeWorkers =
-                new AtomicInteger(workerCount);
-
-        final ConcurrentLinkedQueue<Integer>
-                openPorts =
-                new ConcurrentLinkedQueue<>();
-
-        ExecutorService pool =
-                Executors.newFixedThreadPool(
-                        workerCount
-                );
-
-        for (int w = 0;
-             w < workerCount;
-             w++) {
-
-            pool.execute(() -> {
-
-                try {
-
-                    while (true) {
-
-                        int port =
-                                nextPort.getAndIncrement();
-
-                        if (port > endPort) break;
-
-                        try (Socket socket =
-                                     new Socket()) {
-
-                            socket.connect(
-                                    new InetSocketAddress(
-                                            ip,
-                                            port
-                                    ),
-                                    80
-                            );
-
-                            openPorts.add(port);
-
-                            final int foundPort =
-                                    port;
-
-                            runOnUiThread(() -> {
-
-                                discoveryLog.append(
-                                        "ATVIRAS: " +
-                                        ip + ":" +
-                                        foundPort +
-                                        "\n"
-                                );
-
-                                castPort.setText(
-                                        String.valueOf(
-                                                foundPort
-                                        )
-                                );
-                            });
-
-                        } catch (Exception ignored) {}
-
-                        if (port % 250 == 0) {
-
-                            final int current =
-                                    port;
-
-                            runOnUiThread(() ->
-                                    castStatus.setText(
-                                            "Tikrinama: " +
-                                            Math.min(
-                                                    current,
-                                                    endPort
-                                            ) +
-                                            " / " +
-                                            endPort
-                                    )
-                            );
-                        }
-                    }
-
-                } finally {
-
-                    if (activeWorkers
-                            .decrementAndGet() == 0) {
-
-                        pool.shutdown();
-
-                        runOnUiThread(() -> {
-
-                            if (openPorts.isEmpty()) {
-
-                                castStatus.setText(
-                                        "Atvirų TCP portų 1–12000 nerasta"
-                                );
-
-                                discoveryLog.append(
-                                        "\nBaigta. Atvirų TCP portų nerasta."
-                                );
-
-                            } else {
-
-                                ArrayList<Integer> sorted =
-                                        new ArrayList<>(
-                                                openPorts
-                                        );
-
-                                Collections.sort(sorted);
-
-                                StringBuilder result =
-                                        new StringBuilder(
-                                                "\nRasti portai: "
-                                        );
-
-                                for (int i = 0;
-                                     i < sorted.size();
-                                     i++) {
-
-                                    if (i > 0) {
-                                        result.append(", ");
-                                    }
-
-                                    result.append(
-                                            sorted.get(i)
-                                    );
-                                }
-
-                                discoveryLog.append(
-                                        result.toString()
-                                );
-
-                                castStatus.setText(
-                                        "Rasti " +
-                                        sorted.size() +
-                                        " atviri portai. " +
-                                        "Pasirink ir spausk TESTAS."
-                                );
-                            }
-
-                            setTftDisconnected();
-                        });
-                    }
-                }
-            });
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-        handler.removeCallbacks(ticker);
-
-        try {
-            lm.removeUpdates(this);
-        } catch (Exception ignored) {}
-
-        try {
-            if (wssClient != null) wssClient.stop();
-        } catch (Exception ignored) {}
-
+    public void onDestroy() {
+        closeAll();
         super.onDestroy();
     }
 
-    @Override public void onProviderEnabled(String p) {}
-    @Override public void onProviderDisabled(String p) {}
-    @Override public void onStatusChanged(String p, int s, Bundle b) {}
+    @Override
+    public IBinder onBind(Intent i) {
+        return null;
+    }
 }
