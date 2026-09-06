@@ -20,6 +20,9 @@ public class CastService extends Service {
 
     InetAddress tftAddress;
 
+    // SPS/PPS (codec config), kad kiekvienas IDR kadras būtų savarankiškai dekoduojamas.
+    byte[] codecConfig;
+
     static final String CH = "trevoras_cast";
 
     // Originalios programėlės parametrai
@@ -191,13 +194,31 @@ public class CastService extends Service {
                         b.position(info.offset);
                         b.limit(info.offset + info.size);
 
-                        byte[] frame = new byte[info.size];
-                        b.get(frame);
+                        byte[] encoded = new byte[info.size];
+                        b.get(encoded);
 
-                        sendEncodedFrame(
-                                frame,
-                                port
-                        );
+                        // Kai kurie Android encoderiai grąžina AVCC (4 baitų NAL ilgiai),
+                        // o TFT dekoderiai paprastai laukia Annex-B start kodų.
+                        encoded = ensureAnnexB(encoded);
+
+                        boolean config =
+                                (info.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0;
+                        boolean keyFrame =
+                                (info.flags & MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0;
+
+                        if (config) {
+                            codecConfig = encoded;
+                        } else {
+                            byte[] frame = encoded;
+
+                            // SPS/PPS prieš IDR padidina suderinamumą ir leidžia TFT
+                            // pradėti dekoduoti net jei pirmas config paketas buvo praleistas.
+                            if (keyFrame && codecConfig != null && codecConfig.length > 0) {
+                                frame = concat(codecConfig, encoded);
+                            }
+
+                            sendEncodedFrame(frame, port);
+                        }
                     }
 
                     codec.releaseOutputBuffer(ix, false);
@@ -208,6 +229,64 @@ public class CastService extends Service {
         } finally {
             closeAll();
         }
+    }
+
+    /**
+     * Normalizuoja MediaCodec H.264 į Annex-B.
+     * Jei srautas jau turi 00 00 01 / 00 00 00 01 start kodą, jo neliečia.
+     * Kitu atveju bando interpretuoti kaip AVCC: [4-byte BE length][NAL]...
+     */
+    byte[] ensureAnnexB(byte[] data) {
+        if (data == null || data.length < 4) {
+            return data;
+        }
+
+        if ((data[0] == 0 && data[1] == 0 && data[2] == 1) ||
+                (data.length >= 4 && data[0] == 0 && data[1] == 0 &&
+                        data[2] == 0 && data[3] == 1)) {
+            return data;
+        }
+
+        java.io.ByteArrayOutputStream out =
+                new java.io.ByteArrayOutputStream(data.length + 32);
+
+        int p = 0;
+        boolean converted = false;
+
+        while (p + 4 <= data.length) {
+            int n =
+                    ((data[p] & 0xFF) << 24) |
+                    ((data[p + 1] & 0xFF) << 16) |
+                    ((data[p + 2] & 0xFF) << 8) |
+                    (data[p + 3] & 0xFF);
+            p += 4;
+
+            if (n <= 0 || p + n > data.length) {
+                return data;
+            }
+
+            out.write(0);
+            out.write(0);
+            out.write(0);
+            out.write(1);
+            out.write(data, p, n);
+
+            p += n;
+            converted = true;
+        }
+
+        if (!converted || p != data.length) {
+            return data;
+        }
+
+        return out.toByteArray();
+    }
+
+    byte[] concat(byte[] a, byte[] b) {
+        byte[] result = new byte[a.length + b.length];
+        System.arraycopy(a, 0, result, 0, a.length);
+        System.arraycopy(b, 0, result, a.length, b.length);
+        return result;
     }
 
     /**
