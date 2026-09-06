@@ -56,6 +56,21 @@ public class TrevorasWssClient {
     private static volatile Listener listener;
 
     private static int missedHeartbeats = 0;
+    // Suderinamumas su esamu MainActivity
+public TrevorasWssClient() {
+}
+
+public TrevorasWssClient(Listener newListener) {
+    listener = newListener;
+}
+
+public void connectAsync() {
+    connect();
+}
+
+public void stop() {
+    disconnect();
+}
 
     public static void setListener(Listener newListener) {
         listener = newListener;
